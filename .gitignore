@@ -1,0 +1,14 @@
+# Google Drive duplicates
+*.wmv
+*.xlsx
+*.csv
+*.png
+*.jpeg
+*.jpg
+*.txt
+html/
+
+# OS files
+Thumbs.db
+desktop.ini
+.DS_Store
