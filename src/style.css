@@ -413,3 +413,109 @@ h6,
     color: white !important;
     cursor: pointer;
 }
+
+/* --- MOBILE OPTIMIZATION --- */
+@media (max-width: 768px) {
+    :root {
+        --navbar-height: 50px;
+    }
+
+    body {
+        font-size: 11px !important;
+    }
+
+    .main-content {
+        padding: 10px;
+        margin-top: var(--navbar-height);
+        height: calc(100vh - var(--navbar-height));
+        overflow-y: auto !important;
+    }
+
+    /* KPI Cards compact - Single Row */
+    .dashboard-container .row.g-3.mb-4 {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 10px;
+        -webkit-overflow-scrolling: touch;
+        gap: 10px !important;
+    }
+
+    .dashboard-container .row.g-3.mb-4>div {
+        flex: 0 0 auto;
+        width: 150px;
+        /* Cố định chiều rộng để cuộn ngang */
+    }
+
+    .kpi-card-premium {
+        padding: 10px;
+        border-radius: 12px;
+        height: 100%;
+        margin-bottom: 0 !important;
+    }
+
+    .kpi-value {
+        font-size: 18px;
+    }
+
+    .kpi-icon-wrap {
+        width: 35px;
+        height: 35px;
+        font-size: 1rem;
+        border-radius: 8px;
+    }
+
+    .kpi-label {
+        font-size: 8px;
+        margin-bottom: 2px;
+    }
+
+    /* Menu Grid compact */
+    .menu-grid {
+        grid-template-columns: repeat(3, 1fr);
+        /* 3 cột để tiết kiệm không gian */
+        gap: 8px;
+    }
+
+    .menu-card-modern {
+        padding: 12px 5px;
+        border-radius: 10px;
+    }
+
+    .menu-card-modern i {
+        font-size: 1.4rem;
+        width: 40px;
+        height: 40px;
+        line-height: 40px;
+        margin-bottom: 8px;
+    }
+
+    .menu-card-modern span {
+        font-size: 10px;
+        font-weight: 500;
+        line-height: 1.2;
+    }
+
+    /* Filter bar optimization */
+    #filter-bar {
+        padding: 8px !important;
+        margin-bottom: 10px !important;
+    }
+
+    #filter-bar .row>div {
+        margin-bottom: 5px;
+    }
+
+    #filter-bar label {
+        display: none;
+        /* Ẩn label để tiết kiệm chỗ */
+    }
+
+    .navbar-brand img {
+        height: 24px !important;
+    }
+
+    .navbar-brand span {
+        font-size: 14px !important;
+    }
+}
