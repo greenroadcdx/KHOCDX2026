@@ -110,3 +110,45 @@ function saveData(sheetName, data) {
     return { status: 'error', message: error.message };
   }
 }
+
+function updateData(sheetName, data, rowIndex) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(sheetName);
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    
+    // rowIndex từ Frontend là index trong mảng (0-indexed, không tính header)
+    // Trong Google Sheets, dòng đầu tiên là 1, header là dòng 1 => dòng dữ liệu đầu tiên là 2
+    const sheetRowIndex = parseInt(rowIndex) + 2;
+    
+    const rowValues = headers.map(h => data[h] !== undefined ? data[h] : '');
+    sheet.getRange(sheetRowIndex, 1, 1, headers.length).setValues([rowValues]);
+    
+    return { status: 'success' };
+  } catch (error) {
+    return { status: 'error', message: error.message };
+  }
+}
+
+function deleteData(sheetName, rowIndex) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(sheetName);
+    const sheetRowIndex = parseInt(rowIndex) + 2;
+    
+    // Thay vì xóa hẳn, ta đánh dấu 'X' vào cột 'Delete' nếu có
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const deleteColIdx = headers.indexOf('Delete');
+    
+    if (deleteColIdx !== -1) {
+      sheet.getRange(sheetRowIndex, deleteColIdx + 1).setValue('X');
+    } else {
+      // Nếu không có cột Delete, tiến hành xóa dòng (Cẩn trọng)
+      sheet.deleteRow(sheetRowIndex);
+    }
+    
+    return { status: 'success' };
+  } catch (error) {
+    return { status: 'error', message: error.message };
+  }
+}
