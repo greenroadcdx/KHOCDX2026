@@ -62,11 +62,25 @@ async function callGAS(action, ...args) {
     }
 
     try {
-        const response = await fetch(url.toString());
+        console.log('Calling API:', url.toString());
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache',
+            redirect: 'follow'
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const result = await response.json();
         return result;
     } catch (error) {
         console.error('API Error:', error);
+        if (error.message === 'Failed to fetch') {
+            throw new Error('Không thể kết nối API. Vui lòng kiểm tra: 1. Đã Deploy Apps Script là "Anyone". 2. Bạn đã cấp quyền truy cập Sheet trong Apps Script Editor.');
+        }
         throw error;
     }
 }
