@@ -1,0 +1,16 @@
+{
+  "name": "qlkho_cdx",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "bugs": {
+    "url": "https://github.com/greenroadcdx/KHOCDX2026/issues"
+  },
+  "homepage": "https://github.com/greenroadcdx/KHOCDX2026#readme"
+}

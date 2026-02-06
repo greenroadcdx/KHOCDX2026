@@ -1,22 +1,54 @@
 /**
  * Google Apps Script API cho Dashboard Quản Lý Tổng Hợp CDX
- * 3 Nghiệp vụ chính: Mua sắm, Nhập xuất tồn, Quản lý nhân sự
+ * CHUYỂN ĐỔI THÀNH REST API ĐỂ DÙNG VỚI GITHUB PAGES
  */
 
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('index')
-    .evaluate()
-    .setTitle('Hệ Thống Quản Lý CDX')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  const action = e.parameter.action;
+  const args = e.parameter.args ? JSON.parse(e.parameter.args) : [];
+  
+  let result;
+  try {
+    switch (action) {
+      case 'getInitialData':
+        result = getInitialData();
+        break;
+      case 'loginUser':
+        result = loginUser(args[0], args[1]);
+        break;
+      case 'saveData':
+        result = saveData(args[0], args[1]);
+        break;
+      case 'updateData':
+        result = updateData(args[0], args[1], args[2]);
+        break;
+      case 'deleteData':
+        result = deleteData(args[0], args[1]);
+        break;
+      default:
+        // Nếu không truyền action, mặc định serve HTML (để vẫn dùng được trên GAS nếu cần)
+        return HtmlService.createTemplateFromFile('index')
+          .evaluate()
+          .setTitle('Hệ Thống Quản Lý CDX (GAS Mirror)')
+          .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+          .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+  } catch (err) {
+    result = { status: 'error', message: err.toString() };
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+function doPost(e) {
+  // Dự phòng cho các request POST nếu cần
+  return doGet(e);
 }
 
 // === CONFIGURATION ===
 const CONFIG = {
+  SPREADSHEET_ID: '1JSII6jKG1of1CsCYsn_75Va8dGLIYAsBd3JIIaP1Djc',
   SHEETS: {
     USER: 'User',
     CHIPHI: 'Chiphi',
@@ -36,12 +68,16 @@ const CONFIG = {
   }
 };
 
+function getSS() {
+  return SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+}
+
 /**
  * Lấy dữ liệu ban đầu cho ứng dụng
  */
 function getInitialData() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const results = {};
     
     for (const [key, name] of Object.entries(CONFIG.SHEETS)) {
@@ -79,7 +115,7 @@ function rangeToObjects(range) {
 }
 
 function loginUser(username, password) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS();
   const sheet = ss.getSheetByName(CONFIG.SHEETS.USER);
   const data = rangeToObjects(sheet.getDataRange().getValues());
   
@@ -98,7 +134,7 @@ function loginUser(username, password) {
 
 function saveData(sheetName, data) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName(sheetName);
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     
@@ -113,7 +149,7 @@ function saveData(sheetName, data) {
 
 function updateData(sheetName, data, rowIndex) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName(sheetName);
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     
@@ -132,7 +168,7 @@ function updateData(sheetName, data, rowIndex) {
 
 function deleteData(sheetName, rowIndex) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     const sheet = ss.getSheetByName(sheetName);
     const sheetRowIndex = parseInt(rowIndex) + 2;
     
