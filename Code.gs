@@ -47,7 +47,7 @@ function doPost(e) {
 }
 
 // === CONFIGURATION ===
-const CONFIG = {
+const APP_CONFIG = {
   SPREADSHEET_ID: '1JSII6jKG1of1CsCYsn_75Va8dGLIYAsBd3JIIaP1Djc',
   SHEETS: {
     USER: 'User',
@@ -55,6 +55,10 @@ const CONFIG = {
     CHIPHI_CHITIET: 'Chiphichitiet',
     PHIEU_NHAP_XUAT: 'PhieuNhapXuat',
     PNX_CHI_TIET: 'PNXChiTiet',
+    PHIEU_NHAP: 'Phieunhap',
+    NHAP_CHI_TIET: 'NhapChiTiet',
+    PHIEU_XUAT: 'Phieuxuat',
+    XUAT_CHI_TIET: 'XuatChiTiet',
     VAT_LIEU: 'VatLieu',
     DS_KHO: 'DS_kho',
     TON_KHO: 'Tonkho',
@@ -69,36 +73,82 @@ const CONFIG = {
 };
 
 function getSS() {
-  return SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  return SpreadsheetApp.openById(APP_CONFIG.SPREADSHEET_ID);
 }
 
 /**
- * Lấy dữ liệu ban đầu cho ứng dụng
+ * Lấy dữ liệu ban đầu cho ứng dụng - CÓ CACHING
  */
 function getInitialData() {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'initial_data_v1';
+  const cached = cache.get(cacheKey);
+
+  if (cached) {
+    console.log('Returning data from cache');
+    return JSON.parse(cached);
+  }
+
   try {
     const ss = getSS();
     const results = {};
     
-    for (const [key, name] of Object.entries(CONFIG.SHEETS)) {
-      const sheet = ss.getSheetByName(name);
-      if (sheet) {
-        const data = sheet.getDataRange().getValues();
-        if (data.length > 1) {
-          results[name] = rangeToObjects(data);
-        } else {
-          results[name] = [];
-        }
-      }
+    for (const [key, name] of Object.entries(APP_CONFIG.SHEETS)) {
+      results[name] = fetchSheetData(ss, name);
     }
     
+    // Lưu cache trong 20 phút (1200 giây) - CHỈ LƯU NẾU DƯỚI 100KB (Giới hạn của GAS)
+    const stringified = JSON.stringify(results);
+    if (stringified.length < 100000) {
+      cache.put(cacheKey, stringified, 1200);
+    } else {
+      console.log('Data too large to cache: ' + stringified.length);
+    }
     return results;
   } catch (error) {
     return { status: 'error', message: error.message };
   }
 }
 
+/**
+ * Lấy dữ liệu của 1 bảng duy nhất
+ */
+function getSingleSheetData(sheetName) {
+  try {
+    const ss = getSS();
+    const data = fetchSheetData(ss, sheetName);
+    return { status: 'success', data: data, name: sheetName };
+  } catch (error) {
+    return { status: 'error', message: error.message };
+  }
+}
+
+/**
+ * Helper để lấy data từ 1 sheet và chuyển thành Object
+ */
+function fetchSheetData(ss, sheetName) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  
+  const headers = data[0];
+  const rows = data.slice(1);
+  return rows.map(row => {
+    const obj = {};
+    headers.forEach((header, i) => {
+      let val = row[i];
+      if (val instanceof Date) {
+        val = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss'Z'");
+      }
+      obj[header] = val;
+    });
+    return obj;
+  });
+}
+
 function rangeToObjects(range) {
+  // Giữ lại để tương thích ngược nếu cần, nhưng fetchSheetData được tối ưu hơn
   const headers = range[0];
   const data = range.slice(1);
   return data.map(row => {
@@ -116,11 +166,13 @@ function rangeToObjects(range) {
 
 function loginUser(username, password) {
   const ss = getSS();
-  const sheet = ss.getSheetByName(CONFIG.SHEETS.USER);
-  const data = rangeToObjects(sheet.getDataRange().getValues());
+  const sheet = ss.getSheetByName(APP_CONFIG.SHEETS.USER);
+  const data = fetchSheetData(ss, APP_CONFIG.SHEETS.USER);
   
   const user = data.find(u => u['ID'] == username && u['App_pass'] == password);
   if (user) {
+    // Xóa cache khi có user đăng nhập để đảm bảo họ có data mới nhất
+    CacheService.getScriptCache().remove('initial_data_v1');
     return {
       user: {
         id: user['ID'],
@@ -141,6 +193,9 @@ function saveData(sheetName, data) {
     const newRow = headers.map(h => data[h] || '');
     sheet.appendRow(newRow);
     
+    // Xóa cache để lần sau lấy data sẽ được refresh
+    CacheService.getScriptCache().remove('initial_data_v1');
+    
     return { status: 'success' };
   } catch (error) {
     return { status: 'error', message: error.message };
@@ -160,6 +215,9 @@ function updateData(sheetName, data, rowIndex) {
     const rowValues = headers.map(h => data[h] !== undefined ? data[h] : '');
     sheet.getRange(sheetRowIndex, 1, 1, headers.length).setValues([rowValues]);
     
+    // Xóa cache
+    CacheService.getScriptCache().remove('initial_data_v1');
+
     return { status: 'success' };
   } catch (error) {
     return { status: 'error', message: error.message };
@@ -183,6 +241,9 @@ function deleteData(sheetName, rowIndex) {
       sheet.deleteRow(sheetRowIndex);
     }
     
+    // Xóa cache
+    CacheService.getScriptCache().remove('initial_data_v1');
+
     return { status: 'success' };
   } catch (error) {
     return { status: 'error', message: error.message };
