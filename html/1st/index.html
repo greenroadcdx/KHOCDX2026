@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <?!= include('style'); ?>
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar">
+            <h1 class="sidebar-header">HR Dashboard</h1>
+            <ul>
+                <li><a href="#" class="nav-link" data-target="dashboard-view"><i class="fas fa-chart-pie"></i> Tổng quan</a></li>
+                <li><a href="#" class="nav-link" data-target="employee-view"><i class="fas fa-users"></i> Nhân viên</a></li>
+                <li><a href="#" class="nav-link" data-target="attendance-view"><i class="fas fa-calendar-check"></i> Chấm công</a></li>
+                <li><a href="#" class="nav-link" data-target="salary-view"><i class="fas fa-money-bill-wave"></i> Lương</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <!-- View tổng quan -->
+            <div id="dashboard-view" class="content-view">
+                <header class="main-header">
+                    <h2>Dashboard Nhân sự</h2>
+                    <div class="header-actions">
+                        <button id="export-excel"><i class="fas fa-file-excel"></i> Xuất Excel</button>
+                        <button id="export-pdf"><i class="fas fa-file-pdf"></i> Xuất PDF</button>
+                    </div>
+                </header>
+
+                <section class="filters">
+                    <div class="filter-item">
+                        <label for="year-filter">Lọc theo năm</label>
+                        <select id="year-filter"></select>
+                    </div>
+                    <div class="filter-item">
+                        <label for="month-filter">Lọc theo tháng</label>
+                        <select id="month-filter"></select>
+                    </div>
+                </section>
+
+                <section class="kpi-cards">
+                    <div class="card">
+                        <p class="kpi-value" id="total-employees">0</p>
+                        <p class="kpi-label">Nhân viên hoạt động</p>
+                    </div>
+                    <div class="card">
+                        <p class="kpi-value" id="total-payroll">0</p>
+                        <p class="kpi-label">Tổng Quỹ Lương</p>
+                    </div>
+                    <div class="card">
+                        <p class="kpi-value" id="net-salary">0</p>
+                        <p class="kpi-label">Tổng Thực Lĩnh</p>
+                    </div>
+                    <div class="card">
+                        <p class="kpi-value" id="avg-salary">0</p>
+                        <p class="kpi-label">Lương TB/NV</p>
+                    </div>
+                </section>
+
+                <div class="loading-container" id="loading-indicator">
+                    <div class="spinner"></div>
+                    <span>Đang tải dữ liệu...</span>
+                </div>
+
+                <div id="data-container">
+                    <section class="salary-table-section" id="salary-table-container" style="display: none;">
+                        <div class="table-wrapper">
+                            <h3><i class="fas fa-file-invoice-dollar"></i> Bảng lương chi tiết tháng <span id="salary-month-title"></span></h3>
+                            <div class="table-container-horizontal">
+                                <table id="salary-table">
+                                    <thead>
+                                        <tr id="salary-table-header"></tr>
+                                    </thead>
+                                    <tbody id="salary-table-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- View nhân viên -->
+            <div id="employee-view" class="content-view" style="display: none;">
+                <header class="main-header">
+                    <h2>Quản lý Nhân viên</h2>
+                    <div class="header-actions">
+                        <button id="add-employee"><i class="fas fa-plus"></i> Thêm NV</button>
+                        <button id="refresh-employee"><i class="fas fa-sync-alt"></i> Làm mới</button>
+                    </div>
+                </header>
+
+                <div class="table-wrapper">
+                    <div class="table-container">
+                        <table id="employee-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Họ và tên</th>
+                                    <th>Chức vụ</th>
+                                    <th>Phòng ban</th>
+                                    <th>Ngày vào làm</th>
+                                    <th>Lương cơ bản</th>
+                                    <th>Trạng thái</th>
+                                    <th>Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="employee-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View chấm công -->
+            <div id="attendance-view" class="content-view" style="display: none;">
+                <!-- Nội dung view chấm công -->
+            </div>
+
+            <!-- View lương -->
+            <div id="salary-view" class="content-view" style="display: none;">
+                <!-- Nội dung view lương -->
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <?!= include('script'); ?>
+</body>
+</html>

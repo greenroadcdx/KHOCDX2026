@@ -1,0 +1,135 @@
+// =======================================================
+// PHẦN 1: PHỤC VỤ GIAO DIỆN WEB (FRONTEND)
+// =======================================================
+
+function doGet(e) {
+  return HtmlService.createTemplateFromFile('index')
+      .evaluate()
+      .setTitle('HR Dashboard')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+// =======================================================
+// PHẦN 2: CUNG CẤP DỮ LIỆU (BACKEND)
+// =======================================================
+
+function getServerData() {
+  try {
+    const allData = {
+      User: getUserData(),
+      ChamCong: getChamCongData(),
+      GiaoDichLuong: getGiaoDichLuongData(),
+      LichSuLuong: getLichSuLuongData()
+    };
+    return allData;
+  } catch (error) {
+    console.error('Lỗi khi lấy dữ liệu phía server:', error);
+    return { error: error.message };
+  }
+}
+
+// Hàm mới: Cập nhật tiền công ngày
+function updateDailyWage(userId, date, amount) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('ChamCong');
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    
+    // Tìm index các cột cần thiết
+    const idCol = headers.indexOf('ID_NhanVien');
+    const dateCol = headers.indexOf('Ngay');
+    const wageCol = headers.indexOf('TienCongNgay');
+    
+    if (idCol === -1 || dateCol === -1 || wageCol === -1) {
+      throw new Error('Không tìm thấy cột dữ liệu cần thiết');
+    }
+    
+    // Tìm dòng cần cập nhật
+    let foundRow = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][idCol] == userId && data[i][dateCol] == date) {
+        foundRow = i + 1; // +1 vì mảng bắt đầu từ 0 nhưng sheet từ 1
+        break;
+      }
+    }
+    
+    if (foundRow === -1) {
+      // Nếu không tìm thấy, thêm dòng mới
+      const newRow = [];
+      headers.forEach((header, index) => {
+        if (index === idCol) newRow.push(userId);
+        else if (index === dateCol) newRow.push(date);
+        else if (index === wageCol) newRow.push(amount);
+        else newRow.push('');
+      });
+      sheet.appendRow(newRow);
+    } else {
+      // Cập nhật dòng hiện có
+      sheet.getRange(foundRow, wageCol + 1).setValue(amount);
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Lỗi khi cập nhật tiền công:', error);
+    return { error: error.message };
+  }
+}
+
+// === CÁC HÀM LẤY DỮ LIỆU TỪ SHEET ===
+const SHEET_CONFIG = {
+  SHEETS: {
+    USER: 'User',
+    CHAMCONG: 'ChamCong', 
+    GIAODICHLUONG: 'GiaoDichLuong',
+    LICHSULUONG: 'LichSuLuong'
+  }
+};
+
+function getSpreadsheet() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function sheetExists(sheetName) {
+  const ss = getSpreadsheet();
+  return ss.getSheetByName(sheetName) !== null;
+}
+
+function rangeToObjects(range) {
+  if (!range || range.length === 0) return [];
+  const headers = range[0].map(String);
+  const dataRows = range.slice(1);
+  return dataRows.map(row => {
+    const obj = {};
+    headers.forEach((header, index) => {
+      let value = row[index];
+      if (value === null || value === undefined || value === '') value = '';
+      if (value instanceof Date) {
+        value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      }
+      obj[header] = value;
+    });
+    return obj;
+  });
+}
+
+function getDataFromSheet(sheetName) {
+  try {
+    if (!sheetExists(sheetName)) return [];
+    const sheet = getSpreadsheet().getSheetByName(sheetName);
+    const range = sheet.getDataRange().getValues();
+    if (range.length <= 1) return [];
+    return rangeToObjects(range);
+  } catch (error) {
+    console.error(`Lỗi khi lấy dữ liệu từ sheet "${sheetName}":`, error);
+    return [];
+  }
+}
+
+function getUserData() { return getDataFromSheet(SHEET_CONFIG.SHEETS.USER); }
+function getChamCongData() { return getDataFromSheet(SHEET_CONFIG.SHEETS.CHAMCONG); }
+function getGiaoDichLuongData() { return getDataFromSheet(SHEET_CONFIG.SHEETS.GIAODICHLUONG); }
+function getLichSuLuongData() { return getDataFromSheet(SHEET_CONFIG.SHEETS.LICHSULUONG); }

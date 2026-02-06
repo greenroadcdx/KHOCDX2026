@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Quản Lý CDX</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <?!= include('CSS'); ?>
+</head>
+<body class="bg-light">
+
+    <!-- Màn hình Loading -->
+    <div id="loading-overlay">
+        <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Đang tải...</span>
+        </div>
+        <div class="mt-3 text-light fw-bold">Đang xử lý dữ liệu...</div>
+    </div>
+
+    <!-- Màn hình Đăng Nhập -->
+    <div id="login-container" class="container d-flex justify-content-center align-items-center min-vh-100">
+        <div class="login-box shadow-lg p-4 p-md-5 bg-white rounded w-100" style="max-width: 450px;">
+            <div class="text-center mb-4">
+                <img src="https://raw.githubusercontent.com/impactslowforest/Logo/refs/heads/main/CDX%20logo%20banner.jpg" alt="CDX Logo" class="img-fluid mb-3" style="max-height: 80px;">
+                <h4 class="text-primary fw-bold">ĐĂNG NHẬP HỆ THỐNG</h4>
+                <p class="text-muted">Vui lòng nhập thông tin tài khoản</p>
+            </div>
+            <form id="form-login">
+                <div class="form-floating mb-3">
+                    <input type="text" class="form-control" id="username" placeholder="Mã nhân viên (ID)" required>
+                    <label for="username"><i class="fas fa-user me-2"></i>Mã nhân viên (ID)</label>
+                </div>
+                <div class="form-floating mb-3">
+                    <input type="password" class="form-control" id="password" placeholder="Mật khẩu (App_pass)" required>
+                    <label for="password"><i class="fas fa-lock me-2"></i>Mật khẩu</label>
+                </div>
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary btn-lg fw-bold">Đăng Nhập</button>
+                </div>
+                <div id="login-message" class="text-danger mt-3 text-center small fw-bold"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Giao diện Chính (App Container) -->
+    <div id="app-container" class="d-none d-flex flex-column min-vh-100">
+        
+        <!-- Navbar (Thanh điều hướng trên cùng) -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm fixed-top">
+            <div class="container-fluid">
+                <!-- Nút mở sidebar trên mobile -->
+                <button class="btn text-white d-lg-none me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+                    <i class="fas fa-bars fa-lg"></i>
+                </button>
+                
+                <!-- Logo & Tên ứng dụng -->
+                <a class="navbar-brand fw-bold d-flex align-items-center" href="#">
+                    <img src="https://raw.githubusercontent.com/impactslowforest/Logo/refs/heads/main/CDX%20logo%20banner.jpg" alt="CDX Logo" height="40" class="d-inline-block align-text-top me-2 bg-white rounded p-1">
+                    <span class="d-none d-sm-inline">HỆ THỐNG QUẢN LÝ CDX</span>
+                </a>
+
+                <!-- Menu người dùng bên phải -->
+                <div class="d-flex align-items-center ms-auto">
+                    <div class="dropdown">
+                        <button class="btn btn-link text-white text-decoration-none dropdown-toggle d-flex align-items-center" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user-circle fa-lg me-2"></i>
+                            <span id="user-display-name" class="d-none d-md-inline fw-bold">User</span>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="userDropdown">
+                            <li><a class="dropdown-item disabled" href="#"><i class="fas fa-id-badge me-2"></i>Thông tin tài khoản</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><button class="dropdown-item text-danger" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i>Đăng xuất</button></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Sidebar (Menu bên trái - Offcanvas) -->
+        <div class="offcanvas offcanvas-start bg-white sidebar-menu" tabindex="-1" id="sidebarMenu" aria-labelledby="sidebarMenuLabel">
+            <div class="offcanvas-header bg-primary text-white d-lg-none">
+                <h5 class="offcanvas-title fw-bold" id="sidebarMenuLabel">
+                    <img src="https://raw.githubusercontent.com/impactslowforest/Logo/refs/heads/main/CDX%20logo%20banner.jpg" alt="CDX Logo" height="30" class="bg-white rounded p-1 me-2">
+                    Menu
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body p-0">
+                <div class="list-group list-group-flush my-3">
+                    <a href="#" class="list-group-item list-group-item-action active" onclick="switchTab('dashboard', this)">
+                        <i class="fas fa-chart-pie me-3 text-primary"></i>Tổng quan
+                    </a>
+                    
+                    <div class="sidebar-heading mt-3 mb-2 px-3 text-muted small fw-bold text-uppercase">Quản lý Kho</div>
+                    <a href="#" class="list-group-item list-group-item-action" onclick="switchTab('vattu', this)">
+                        <i class="fas fa-boxes me-3 text-success"></i>Danh mục Hàng hóa
+                    </a>
+                    <a href="#" class="list-group-item list-group-item-action" onclick="switchTab('tonkho', this)">
+                        <i class="fas fa-warehouse me-3 text-warning"></i>Hàng Tồn kho
+                    </a>
+                     <a href="#" class="list-group-item list-group-item-action" onclick="switchTab('phieunhap', this)">
+                        <i class="fas fa-arrow-down me-3 text-info"></i>Nhập kho
+                    </a>
+                     <a href="#" class="list-group-item list-group-item-action" onclick="switchTab('phieuxuat', this)">
+                        <i class="fas fa-arrow-up me-3 text-danger"></i>Xuất kho
+                    </a>
+
+                    <div class="sidebar-heading mt-3 mb-2 px-3 text-muted small fw-bold text-uppercase">Tài chính</div>
+                    <a href="#" class="list-group-item list-group-item-action" onclick="switchTab('chiphi', this)">
+                        <i class="fas fa-file-invoice-dollar me-3 text-secondary"></i>Quản lý Chi phí
+                    </a>
+
+                    <div id="admin-menu" class="d-none">
+                        <div class="sidebar-heading mt-3 mb-2 px-3 text-muted small fw-bold text-uppercase">Nhân sự & Quyền</div>
+                        <a href="#" class="list-group-item list-group-item-action" onclick="switchTab('nhansu', this)">
+                            <i class="fas fa-users me-3 text-primary"></i>Danh sách Nhân viên
+                        </a>
+                        <a href="#" class="list-group-item list-group-item-action" onclick="switchTab('bangluong', this)">
+                            <i class="fas fa-money-check-alt me-3 text-success"></i>Bảng lương
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content (Nội dung chính) -->
+        <main class="main-content flex-grow-1 p-3 p-md-4">
+            
+            <!-- Tab: Dashboard -->
+            <div id="tab-dashboard" class="content-tab">
+                <h4 class="mb-4 fw-bold text-primary"><i class="fas fa-tachometer-alt me-2"></i>Tổng quan hệ thống</h4>
+                <div class="row g-4">
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card text-white bg-primary h-100 shadow-sm card-hover">
+                            <div class="card-body d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="card-title mb-1">Nhân sự</h6>
+                                    <h2 class="display-6 fw-bold mb-0" id="stat-user-count">0</h2>
+                                </div>
+                                <i class="fas fa-users fa-3x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card text-white bg-success h-100 shadow-sm card-hover">
+                            <div class="card-body d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="card-title mb-1">Hàng hóa</h6>
+                                    <h2 class="display-6 fw-bold mb-0" id="stat-item-count">0</h2>
+                                </div>
+                                <i class="fas fa-boxes fa-3x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <div class="card text-white bg-warning h-100 shadow-sm card-hover">
+                            <div class="card-body d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="card-title mb-1">Kho hàng</h6>
+                                    <h2 class="display-6 fw-bold mb-0" id="stat-kho-count">0</h2>
+                                </div>
+                                <i class="fas fa-warehouse fa-3x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="col-md-6 col-lg-3">
+                        <div class="card text-white bg-info h-100 shadow-sm card-hover">
+                            <div class="card-body d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="card-title mb-1">Phiếu Nhập/Xuất</h6>
+                                    <h2 class="display-6 fw-bold mb-0" id="stat-phieu-count">0</h2>
+                                </div>
+                                <i class="fas fa-exchange-alt fa-3x opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Generic Data Table (Dùng chung) -->
+            <div id="tab-generic" class="content-tab d-none">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 pb-2 border-bottom">
+                    <h4 id="page-title" class="fw-bold text-primary mb-2 mb-md-0">Danh sách</h4>
+                    <button class="btn btn-primary shadow-sm" onclick="openAddModal()">
+                        <i class="fas fa-plus-circle me-2"></i>Thêm mới
+                    </button>
+                </div>
+                
+                <!-- Search box -->
+                <div class="card shadow-sm mb-3">
+                    <div class="card-body p-2">
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                            <input type="text" id="search-input" class="form-control border-start-0 ps-0" placeholder="Tìm kiếm dữ liệu..." onkeyup="searchTable()">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="card shadow-sm">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped align-middle mb-0" id="data-table">
+                                <thead class="table-light text-primary fw-bold">
+                                    <!-- Header render bằng JS -->
+                                </thead>
+                                <tbody>
+                                    <!-- Body render bằng JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white py-3 text-center shadow-sm mt-auto">
+            <div class="container small text-muted">
+                <strong>Hệ Thống Quản Lý CDX</strong> &copy; 2023. All rights reserved.
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- Modal Thêm/Sửa (Dynamic) -->
+    <div class="modal fade" id="dataModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold" id="modalTitle">Cập nhật dữ liệu</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <form id="dynamic-form" class="row g-3">
+                        <!-- Các input sẽ được render tự động -->
+                    </form>
+                </div>
+                <div class="modal-footer bg-white">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="fas fa-times me-2"></i>Đóng</button>
+                    <button type="button" class="btn btn-primary fw-bold" onclick="submitData()"><i class="fas fa-save me-2"></i>Lưu dữ liệu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- SweetAlert2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <?!= include('Javascript'); ?>
+</body>
+</html>

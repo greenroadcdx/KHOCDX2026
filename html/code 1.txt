@@ -1,0 +1,165 @@
+// =================================================================
+// CÁC HẰNG SỐ ĐỊNH NGHĨA
+// =================================================================
+// !!! THAY THẾ ID NÀY BẰNG ID TRANG TÍNH CỦA BẠN !!!
+const SPREADSHEET_ID = "YOUR_SPREADSHEET_ID_HERE"; 
+
+// Tên các trang tính (Sheet) trong file của bạn
+const USER_SHEET = "User";
+const CHAMCONG_SHEET = "Chamcong";
+const GIAODICH_LUONG_SHEET = "GiaoDichLuong";
+const LICHSU_LUONG_SHEET = "LichSuLuong";
+
+// Key để lưu dữ liệu vào cache. Thay đổi key này nếu bạn cập nhật logic.
+const CACHE_KEY = 'nhan_vien_dashboard_v1';
+const CACHE_EXPIRATION_SECONDS = 3600; // Cache tồn tại trong 1 giờ (3600 giây)
+
+
+// =================================================================
+// HÀM API CHÍNH (WEB APP ENTRY POINT)
+// =================================================================
+/**
+ * Hàm API chính, trả về dữ liệu dưới dạng JSON và có chức năng làm mới cache.
+ * @param {object} e - Tham số sự kiện từ yêu cầu GET.
+ */
+function doGet(e) {
+  // Buộc làm mới cache nếu có tham số ?refresh=true trong URL
+  if (e && e.parameter && e.parameter.refresh === 'true') {
+    updateNhanVienDataCache();
+  }
+  
+  const cache = CacheService.getScriptCache();
+  let cachedData = cache.get(CACHE_KEY);
+
+  // Nếu trong cache không có dữ liệu, chạy hàm xử lý để tạo mới
+  if (!cachedData) {
+    console.log('Cache không tồn tại, đang tạo dữ liệu mới...');
+    updateNhanVienDataCache();
+    cachedData = cache.get(CACHE_KEY);
+  } else {
+    console.log('Dữ liệu được trả về từ cache.');
+  }
+  
+  // Trả về dữ liệu JSON. Nếu không có gì, trả về mảng rỗng "[]".
+  return ContentService.createTextOutput(cachedData || "[]")
+                     .setMimeType(ContentService.MimeType.JSON);
+}
+
+
+// =================================================================
+// HÀM XỬ LÝ DỮ LIỆU VÀ CACHING
+// =================================================================
+/**
+ * Hàm xử lý dữ liệu nặng: lấy dữ liệu từ các sheet, kết hợp chúng
+ * và lưu kết quả vào cache.
+ */
+function updateNhanVienDataCache() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    
+    // --- BƯỚC 1: HÀM TRỢ GIÚP ĐỂ LẤY DỮ LIỆU TỪ SHEET ---
+    const getSheetData = (sheetName) => {
+      const sheet = ss.getSheetByName(sheetName);
+      if (!sheet) {
+        console.error(`Lỗi: Không tìm thấy trang tính có tên "${sheetName}".`);
+        // Trả về cấu trúc rỗng để không gây lỗi ở các bước sau
+        return { header: [], values: [] };
+      }
+      const data = sheet.getDataRange().getValues();
+      if (data.length < 2) {
+        // Trả về header nếu có, và mảng giá trị rỗng
+        return { header: data[0] || [], values: [] };
+      }
+      const header = data.shift(); // Lấy hàng đầu tiên làm tiêu đề
+      // Lọc ra các hàng rỗng (hàng không có bất kỳ giá trị nào)
+      const filteredValues = data.filter(row => row.join("").trim() !== "");
+      return { header, values: filteredValues };
+    };
+
+    // --- BƯỚC 2: ĐỌC DỮ LIỆU THÔ TỪ TẤT CẢ CÁC SHEET ---
+    const { header: userHeader, values: userValues } = getSheetData(USER_SHEET);
+    const { header: chamcongHeader, values: chamcongValues } = getSheetData(CHAMCONG_SHEET);
+    const { header: giaodichHeader, values: giaodichValues } = getSheetData(GIAODICH_LUONG_SHEET);
+    const { header: lichsuHeader, values: lichsuValues } = getSheetData(LICHSU_LUONG_SHEET);
+
+    // --- BƯỚC 3: TẠO CÁC BẢNG TRA CỨU (MAPS) ĐỂ TĂNG TỐC ĐỘ ---
+    // Nhóm tất cả các bản ghi theo ID_NhanVien
+    const chamcongByNhanVienMap = groupDataByKey(chamcongValues, chamcongHeader, 'ID_NhanVien');
+    const giaodichByNhanVienMap = groupDataByKey(giaodichValues, giaodichHeader, 'ID_NhanVien');
+    const lichsuLuongByNhanVienMap = groupDataByKey(lichsuValues, lichsuHeader, 'ID_NhanVien');
+
+    // --- BƯỚC 4: KẾT HỢP DỮ LIỆU (LẤY USER LÀM TRUNG TÂM) ---
+    const combinedData = userValues.map(userRow => {
+      const nhanVienInfo = arrayToJSONObject(userHeader, userRow);
+      const userId = nhanVienInfo.ID ? nhanVienInfo.ID.toString() : null;
+
+      if (!userId) return null; // Bỏ qua nếu user không có ID
+
+      // Gắn dữ liệu liên quan từ các Map đã tạo
+      nhanVienInfo.Chamcong = chamcongByNhanVienMap.get(userId) || [];
+      nhanVienInfo.GiaoDichLuong = giaodichByNhanVienMap.get(userId) || [];
+      nhanVienInfo.LichSuLuong = lichsuLuongByNhanVienMap.get(userId) || [];
+      
+      return nhanVienInfo;
+    }).filter(Boolean); // Lọc ra các user null (không có ID)
+
+    // --- BƯỚC 5: LƯU VÀO CACHE ---
+    const dataString = JSON.stringify(combinedData, null, 2); // null, 2 để format JSON cho dễ đọc khi debug
+    const cache = CacheService.getScriptCache();
+    cache.put(CACHE_KEY, dataString, CACHE_EXPIRATION_SECONDS);
+    
+    console.log(`Cache đã được cập nhật thành công cho ${combinedData.length} nhân viên.`);
+
+  } catch (err) {
+    console.error("Lỗi nghiêm trọng khi xử lý dữ liệu: ", err.message, err.stack);
+  }
+}
+
+
+// =================================================================
+// CÁC HÀM TRỢ GIÚP (HELPER FUNCTIONS)
+// =================================================================
+/**
+ * Chuyển đổi một hàng (dạng mảng) thành một đối tượng JSON.
+ * @param {string[]} headers - Mảng chứa các tên cột (tiêu đề).
+ * @param {any[]} row - Mảng chứa giá trị của một hàng.
+ * @returns {object} - Đối tượng JSON tương ứng.
+ */
+function arrayToJSONObject(headers, row) {
+  const obj = {};
+  if (!headers || !row) return obj;
+  headers.forEach((header, i) => {
+    if (header) { // Chỉ thêm nếu có tên cột
+      obj[header] = row[i];
+    }
+  });
+  return obj;
+}
+
+/**
+ * Nhóm một mảng các đối tượng theo một key chung.
+ * @param {any[][]} dataValues - Dữ liệu dạng mảng 2 chiều.
+ * @param {string[]} header - Mảng tiêu đề.
+ * @param {string} keyName - Tên cột (key) để nhóm dữ liệu.
+ * @returns {Map<string, object[]>} - Một Map với key là giá trị của cột keyName, 
+ * value là một mảng các đối tượng có cùng key đó.
+ */
+function groupDataByKey(dataValues, header, keyName) {
+    const dataMap = new Map();
+    const keyIndex = header.indexOf(keyName);
+    if (keyIndex === -1) {
+        console.warn(`Cảnh báo: Không tìm thấy cột key "${keyName}" trong header.`);
+        return dataMap;
+    }
+
+    dataValues.forEach(row => {
+        const key = row[keyIndex] ? row[keyIndex].toString() : null;
+        if (key) {
+            if (!dataMap.has(key)) {
+                dataMap.set(key, []);
+            }
+            dataMap.get(key).push(arrayToJSONObject(header, row));
+        }
+    });
+    return dataMap;
+}

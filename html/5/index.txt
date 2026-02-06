@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Quản Lý Tổng Hợp</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --sidebar-bg: #1e4620;
+            --sidebar-link: #e9ecef;
+            --sidebar-hover: #2a622c;
+            --sidebar-active: #059669;
+            --weekend-bg: #fffbdd;
+            --sticky-bg: #ffffff; 
+            --header-sticky-bg: #212529;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f0f2f5;
+            overflow-x: hidden;
+        }
+
+        #main-header {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            background-color: var(--sidebar-bg);
+            color: white;
+            min-height: 76px;
+        }
+        #main-header .app-title {
+            flex-grow: 1;
+            text-align: center;
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        #main-header #sidebar-toggle {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            z-index: 1045;
+        }
+
+        .wrapper { display: flex; width: 100%; }
+
+        #sidebar {
+            width: 260px;
+            min-width: 260px;
+            background: var(--sidebar-bg);
+            color: var(--sidebar-link);
+            transition: margin-left 0.35s ease-in-out;
+            min-height: calc(100vh - 76px);
+        }
+        #sidebar.collapsed { margin-left: -260px; }
+        #sidebar .sidebar-header { padding: 20px; background: rgba(0,0,0,0.1); text-align: center; }
+        #sidebar .sidebar-header img { max-width: 180px; margin-bottom: 15px; border-radius: 8px; }
+        #sidebar ul li a { padding: 12px 20px; font-size: 1.05em; display: block; color: var(--sidebar-link); text-decoration: none; transition: all 0.2s; border-radius: 4px; margin: 2px 10px; }
+        #sidebar ul li a:hover, #sidebar ul li a[aria-expanded="true"], #sidebar ul li.active > a { color: #fff; background: var(--sidebar-hover); }
+        #sidebar ul li a i { margin-right: 10px; }
+        #sidebar ul ul a { font-size: 0.95em !important; padding-left: 40px !important; background: rgba(0,0,0,0.1); }
+
+        #content {
+            flex-grow: 1;
+            padding: 2rem;
+            height: calc(100vh - 76px);
+            overflow-y: auto;
+            transition: margin-left 0.35s ease-in-out;
+        }
+
+        .view-container { animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .table-responsive {
+            max-height: 70vh;
+        }
+
+        .sortable-header { cursor: pointer; user-select: none; }
+        .sortable-header:hover { background-color: rgba(255, 255, 255, 0.1) !important; }
+        .sort-icon { margin-left: 5px; color: #adb5bd; transition: color 0.2s, transform 0.2s; }
+        .sort-icon.active { color: white; }
+        .sort-icon.fa-sort-up { transform: translateY(-2px); }
+        .sort-icon.fa-sort-down { transform: translateY(2px); }
+
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            background-color: var(--sticky-bg);
+            z-index: 1;
+        }
+        .first-col {
+            min-width: 60px;
+            left: 0;
+        }
+        .second-col {
+            min-width: 200px;
+            left: 60px; 
+        }
+        .top-left-corner {
+            z-index: 3 !important;
+        }
+        
+        .employee-name-clickable {
+            cursor: pointer;
+            color: #0d6efd;
+            font-weight: 500;
+        }
+        .employee-name-clickable:hover {
+            text-decoration: underline;
+        }
+        #payrollDetailModal .modal-body .row {
+            border-bottom: 1px solid #eee;
+            padding-top: 0.75rem;
+            padding-bottom: 0.75rem;
+        }
+        #payrollDetailModal .modal-body .row:last-child {
+            border-bottom: none;
+        }
+        #payrollDetailModal .detail-label {
+            font-weight: 500;
+            color: #6c757d;
+        }
+        #payrollDetailModal .detail-value {
+            font-weight: 500;
+            color: #212529;
+        }
+        #payrollDetailModal .detail-value.final-amount {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #198754;
+        }
+
+        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1030; }
+        .sidebar-overlay.active { display: block; }
+
+        @media (max-width: 991.98px) {
+            #main-header .app-title { font-size: 1.5rem; text-align: center; margin-right: -40px; }
+            #sidebar { position: fixed; top: 0; left: 0; height: 100vh; z-index: 1040; margin-left: -260px; transition: margin-left 0.3s ease-out; min-height: 100vh; }
+            #sidebar.collapsed { margin-left: -260px; }
+            #sidebar.active { margin-left: 0; }
+            #content { padding: 1rem; }
+            .card-body .row.g-3, .d-flex.flex-wrap.gap-2 { flex-direction: column; align-items: stretch !important; }
+            .card-body .row.g-3 > div, .d-flex.flex-wrap.gap-2 > div { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <header id="main-header">
+        <button id="sidebar-toggle" class="btn"><i class="fas fa-bars"></i></button>
+        <h1 class="app-title">Quản lý kho công trình - Công ty Con Đường Xanh</h1>
+    </header>
+
+    <div class="sidebar-overlay"></div>
+    <div class="wrapper">
+        <nav id="sidebar">
+              <div class="sidebar-header">
+                  <img src="https://raw.githubusercontent.com/impactslowforest/Logo/refs/heads/main/CDX%20logo%20banner.jpg" alt="Logo Công ty Con Đường Xanh" class="img-fluid" style="margin-bottom: 15px; border-radius: 8px; max-width: 180px;">
+              </div>
+              <ul class="list-unstyled components">
+                  <li class="active"><a href="#" class="nav-link" data-view="overview-view"><i class="fas fa-tachometer-alt"></i> Tổng Quan</a></li>
+                  <li>
+                      <a href="#warehouseSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle"><i class="fas fa-warehouse"></i> Quản lý kho</a>
+                      <ul class="collapse list-unstyled" id="warehouseSubmenu">
+                          <li><a href="#" class="nav-link" data-view="inventory-import-view">Nhập kho</a></li>
+                          <li><a href="#" class="nav-link" data-view="inventory-export-view">Xuất kho</a></li>
+                          <li><a href="#" class="nav-link" data-view="inventory-stock-view">Tồn kho</a></li>
+                          <li><a href="#">Chuyển kho</a></li>
+                      </ul>
+                  </li>
+                  <li>
+                      <a href="#shoppingSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle"><i class="fas fa-shopping-cart"></i> Mua sắm</a>
+                      <ul class="collapse list-unstyled" id="shoppingSubmenu">
+                          <li><a href="#" class="nav-link" data-view="shopping-view">Quản lý Mua sắm</a></li>
+                          <li><a href="#">Báo cáo Chi phí</a></li>
+                      </ul>
+                   </li>
+                  <li>
+                      <a href="#hrSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle"><i class="fas fa-users-cog"></i> Quản lý Nhân sự</a>
+                      <ul class="collapse list-unstyled" id="hrSubmenu">
+                          <li><a href="#" class="nav-link" data-view="attendance-view">Chấm công</a></li>
+                          <li><a href="#" class="nav-link" data-view="payroll-view">Bảng lương</a></li>
+                      </ul>
+                  </li>
+                  <li>
+                      <a href="#settingsSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle"><i class="fas fa-cog"></i> Cài đặt</a>
+                      <ul class="collapse list-unstyled" id="settingsSubmenu">
+                          <li><a href="#">Phân quyền</a></li>
+                          <li><a href="#" class="nav-link" data-view="api-manager-view">Quản lý API</a></li>
+                      </ul>
+                  </li>
+              </ul>
+        </nav>
+
+        <main id="content">
+            <div id="loader" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1050;">
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+            </div>
+            <div id="overview-view" class="view-container"></div>
+            <div id="api-manager-view" class="view-container" style="display: none;"></div>
+            <div id="payroll-view" class="view-container" style="display: none;"></div>
+            <div id="shopping-view" class="view-container" style="display: none;"></div>
+            <div id="attendance-view" class="view-container" style="display: none;"></div>
+            <div id="inventory-import-view" class="view-container" style="display: none;"></div>
+            <div id="inventory-export-view" class="view-container" style="display: none;"></div>
+            <div id="inventory-stock-view" class="view-container" style="display: none;"></div>
+        </main>
+    </div>
+
+    <div class="modal fade" id="payrollDetailModal" tabindex="-1" aria-labelledby="payrollDetailModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title" id="payrollDetailModalLabel">Chi tiết Lương Nhân viên</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body" id="payroll-modal-content">
+            <div class="row">
+              <div class="col-5 detail-label">Họ và tên:</div>
+              <div class="col-7 detail-value" id="modal-employee-name"></div>
+            </div>
+            <div class="row">
+              <div class="col-5 detail-label">Kỳ tính lương:</div>
+              <div class="col-7 detail-value" id="modal-payroll-period"></div>
+            </div>
+            <div class="row">
+              <div class="col-5 detail-label">Kho làm việc:</div>
+              <div class="col-7 detail-value" id="modal-work-location"></div>
+            </div>
+            <hr>
+            <div class="row">
+              <div class="col-5 detail-label">Tổng số công:</div>
+              <div class="col-7 detail-value" id="modal-sum-ngay-cong"></div>
+            </div>
+             <div class="row">
+              <div class="col-5 detail-label">Tổng giờ tăng ca:</div>
+              <div class="col-7 detail-value" id="modal-sum-gio-tang-ca"></div>
+            </div>
+             <div class="row">
+              <div class="col-5 detail-label">∑ tiền công:</div>
+              <div class="col-7 detail-value" id="modal-sum-tien-cong"></div>
+            </div>
+            <div class="row">
+              <div class="col-5 detail-label">Thưởng:</div>
+              <div class="col-7 detail-value" id="modal-thuong"></div>
+            </div>
+             <div class="row">
+              <div class="col-5 detail-label">Phụ cấp:</div>
+              <div class="col-7 detail-value" id="modal-phu-cap"></div>
+            </div>
+            <hr>
+            <div class="row">
+              <div class="col-5 detail-label">Ứng:</div>
+              <div class="col-7 detail-value" id="modal-ung"></div>
+            </div>
+             <div class="row">
+              <div class="col-5 detail-label">BHYT:</div>
+                <div class="col-7 detail-value" id="modal-bhyt"></div>
+            </div>
+            <div class="row">
+              <div class="col-5 detail-label">Khấu trừ (NS Đầu kỳ):</div>
+              <div class="col-7 detail-value" id="modal-khau-tru-khac"></div>
+            </div>
+            <div class="row bg-light">
+              <div class="col-5 detail-label">THỰC LĨNH:</div>
+              <div class="col-7 detail-value final-amount" id="modal-thuc-linh"></div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            <button type="button" class="btn btn-success" id="export-payroll-detail"><i class="fas fa-camera"></i> Xuất file ảnh</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbxuG90kyHH9e2Cp8eRxHghGlfoSf4Sx5j3M0v5GOtTWDgipBASd7Mw2k4_Uajn9OVFJqA/exec";
+        let hrDataCache, statsDataCache, shoppingDataCache, inventoryDataCache;
+
+        let warehouseBudgetChart, warehousePersonnelChart, dailyAttendanceChart;
+        let payrollDetailModal;
+        let sortStates = {
+            shopping: { column: 'Ngaychi', direction: 'desc' },
+            attendance: { column: 'name', direction: 'asc' },
+            payroll: { column: 'name', direction: 'asc' }
+        };
+        const isMobile = () => window.innerWidth <= 991.98;
+        function closeMobileSidebar() { if (isMobile()) { document.getElementById('sidebar').classList.remove('active'); document.querySelector('.sidebar-overlay').classList.remove('active'); } }
+        document.getElementById('sidebar-toggle').addEventListener('click', () => { const sidebar = document.getElementById('sidebar'); if (isMobile()) { sidebar.classList.toggle('active'); document.querySelector('.sidebar-overlay').classList.toggle('active'); } else { sidebar.classList.toggle('collapsed'); } });
+        document.querySelector('.sidebar-overlay').addEventListener('click', closeMobileSidebar);
+        
+        function showView(viewId) { 
+            document.querySelectorAll('.view-container').forEach(v => v.style.display = 'none'); 
+            const targetView = document.getElementById(viewId); 
+            if (targetView) { 
+                if (!targetView.dataset.loaded) loadViewContent(viewId); 
+                targetView.style.display = 'block'; 
+            } 
+            const initFunctions = { 
+                'overview-view': initializeOverviewView, 
+                'payroll-view': initializePayrollView, 
+                'shopping-view': initializeShoppingView, 
+                'attendance-view': initializeAttendanceView,
+                'inventory-import-view': initializeInventoryImportView,
+                'inventory-export-view': initializeInventoryExportView,
+                'inventory-stock-view': initializeInventoryStockView
+            }; 
+            if (initFunctions[viewId]) initFunctions[viewId](); 
+        }
+
+        function setActiveLink(clickedLink) { document.querySelectorAll('#sidebar li.active').forEach(li => li.classList.remove('active')); const parentLi = clickedLink.closest('li'); if (parentLi) { parentLi.classList.add('active'); const parentUl = parentLi.parentElement; if (parentUl.classList.contains('collapse')) { const dropdownLi = parentUl.closest('li'); if (dropdownLi) dropdownLi.classList.add('active'); } } }
+        function runApiCall(action, params = {}, callback) { showLoader(true); fetch(`${API_URL}?${new URLSearchParams({ action, ...params })}`).then(res => res.ok ? res.json() : Promise.reject(`Lỗi mạng: ${res.status}`)).then(data => { if (data.error) return Promise.reject(`Lỗi từ API: ${data.error}`); if (callback) callback(data); }).catch(err => { console.error(`API Error ('${action}'):`, err); alert(err.toString()); }).finally(() => showLoader(false)); }
+        function showLoader(isLoading) { document.getElementById('loader').style.display = isLoading ? 'flex' : 'none'; }
+        function formatCurrency(num) { return (typeof num === 'number') ? num.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' }) : '0 ₫'; }
+        function displayJson(data) { document.getElementById('json-result-area').textContent = JSON.stringify(data, null, 2); }
+        function formatDate(dateString) { if (!dateString) return ''; const date = new Date(dateString); if (isNaN(date.getTime())) return ''; const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear(); return `${day}/${month}/${year}`; }
+
+        function initializeOverviewView() { if (statsDataCache) return renderOverview(statsDataCache); runApiCall('getStats', {}, data => { statsDataCache = data; renderOverview(data); }); }
+        
+        // --- CẬP NHẬT: Hàm renderOverview để xử lý dữ liệu biểu đồ nhân sự hàng tháng ---
+        function renderOverview(stats) {
+            if (!stats) return;
+            document.getElementById('total-expenses').textContent = formatCurrency(stats.costs?.totalExpenses || 0);
+            document.getElementById('active-employees').textContent = stats.hr?.activeEmployees || 0;
+            document.getElementById('inactive-personnel').textContent = stats.hr?.inactiveThisMonth || 0;
+            document.getElementById('total-employees').textContent = stats.hr?.totalEmployees || 0;
+            
+            renderWarehouseBudgetChart(stats.costs?.expensesByWarehouse || {});
+            renderDailyAttendanceChart(stats.hr || {});
+
+            const personnelDataMonthly = stats.warehouse?.personnelByWarehouseMonthly || {};
+            const buttonContainer = document.getElementById('personnel-chart-buttons');
+            if(buttonContainer) {
+                buttonContainer.innerHTML = ''; 
+                const monthKeys = Object.keys(personnelDataMonthly).sort().reverse(); 
+
+                monthKeys.forEach((monthKey, index) => {
+                    const [, month] = monthKey.split('-');
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'btn btn-outline-primary';
+                    button.textContent = `T${parseInt(month)}`;
+                    button.dataset.monthKey = monthKey;
+                    
+                    button.addEventListener('click', (e) => {
+                        document.querySelectorAll('#personnel-chart-buttons .btn').forEach(btn => btn.classList.remove('active'));
+                        e.currentTarget.classList.add('active');
+                        const chartData = personnelDataMonthly[e.currentTarget.dataset.monthKey] || {};
+                        renderWarehousePersonnelChart(chartData);
+                    });
+
+                    buttonContainer.appendChild(button);
+
+                    if (index === 0) {
+                        button.classList.add('active');
+                        const initialChartData = personnelDataMonthly[monthKey] || {};
+                        renderWarehousePersonnelChart(initialChartData);
+                    }
+                });
+            }
+        }
+
+        function renderWarehouseBudgetChart(data) { const ctx = document.getElementById('warehouse-budget-chart')?.getContext('2d'); if(!ctx) return; const chartData = { labels: Object.keys(data), datasets: [{ label: 'Chi phí theo Kho (VND)', data: Object.values(data), backgroundColor: 'rgba(25, 135, 84, 0.7)', borderColor: 'rgba(25, 135, 84, 1)', borderWidth: 1 }] }; if(warehouseBudgetChart) { warehouseBudgetChart.data = chartData; warehouseBudgetChart.update(); } else { warehouseBudgetChart = new Chart(ctx, { type: 'bar', data: chartData, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }}); } }
+        
+        function renderWarehousePersonnelChart(data) {
+            const ctx = document.getElementById('warehouse-personnel-chart')?.getContext('2d');
+            if(!ctx) return;
+            const chartData = {
+                labels: Object.keys(data),
+                datasets: [{
+                    label: 'Nhân sự',
+                    data: Object.values(data),
+                    backgroundColor: ['#0d6efd', '#6f42c1', '#d63384', '#fd7e14', '#198754', '#0dcaf0', '#ffc107']
+                }]
+            };
+            if(warehousePersonnelChart) {
+                warehousePersonnelChart.data = chartData;
+                warehousePersonnelChart.update();
+            } else {
+                warehousePersonnelChart = new Chart(ctx, { type: 'doughnut', data: chartData, options: { responsive: true, maintainAspectRatio: false }});
+            }
+        }
+
+        function renderDailyAttendanceChart(data) { const ctx = document.getElementById('daily-attendance-chart')?.getContext('2d'); if(!ctx) return; const chartData = { labels: ['Đi làm', 'Vắng mặt'], datasets: [{ data: [data.attendedToday || 0, data.notAttendedToday || 0], backgroundColor: ['#198754', '#dc3545'] }] }; if(dailyAttendanceChart) { dailyAttendanceChart.data = chartData; dailyAttendanceChart.update(); } else { dailyAttendanceChart = new Chart(ctx, { type: 'pie', data: chartData, options: { responsive: true, maintainAspectRatio: false }}); } }
+
+        function handleSortClick(e, viewId, renderFunction, dataCache) { const header = e.target.closest('.sortable-header'); if (!header) return; const columnKey = header.dataset.sortKey; const state = sortStates[viewId]; if (state.column === columnKey) { state.direction = state.direction === 'asc' ? 'desc' : 'asc'; } else { state.column = columnKey; state.direction = 'asc'; } renderFunction(dataCache); }
+        function updateSortIcons(viewId) { const state = sortStates[viewId]; document.querySelectorAll(`#${viewId}-view .sortable-header`).forEach(header => { const icon = header.querySelector('.sort-icon'); if (icon) { icon.className = 'fas sort-icon'; if (header.dataset.sortKey === state.column) { icon.classList.add(state.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down', 'active'); } else { icon.classList.add('fa-sort'); } } }); }
+        
+        function initializeShoppingView() { if (document.getElementById('shopping-view')?.dataset.initialized) return; const now = new Date(); const year = now.getFullYear(); const month = now.getMonth(); const firstDay = new Date(year, month, 1); const lastDay = new Date(year, month + 1, 0); const toYYYYMMDD = (date) => date.toISOString().split('T')[0]; const fromDateInput = document.getElementById('shopping-from-date'); const toDateInput = document.getElementById('shopping-to-date'); fromDateInput.value = toYYYYMMDD(firstDay); toDateInput.value = toYYYYMMDD(lastDay); document.getElementById('apply-shopping-filter').addEventListener('click', () => renderShoppingTable(shoppingDataCache)); document.getElementById('reset-shopping-filter').addEventListener('click', () => { fromDateInput.value = toYYYYMMDD(firstDay); toDateInput.value = toYYYYMMDD(lastDay); document.getElementById('shopping-content-filter').value = ''; document.getElementById('shopping-type-filter').selectedIndex = 0; document.getElementById('shopping-warehouse-filter').selectedIndex = 0; renderShoppingTable(shoppingDataCache); }); if (shoppingDataCache) { renderShoppingTable(shoppingDataCache); } else { runApiCall('getBusinessData', { business: 'shopping' }, data => { shoppingDataCache = data; populateShoppingFilters(data.chiphiChitiet); renderShoppingTable(data); }); } if(document.getElementById('shopping-view')) document.getElementById('shopping-view').dataset.initialized = 'true'; };
+        function populateShoppingFilters(details) { if(!details) return; const types = [...new Set(details.map(item => item.LoaiChiPhi).filter(Boolean))]; const warehouses = [...new Set(details.map(item => item.Ten_Kho).filter(Boolean))]; const typeSelect = document.getElementById('shopping-type-filter'); const warehouseSelect = document.getElementById('shopping-warehouse-filter'); if(!typeSelect || !warehouseSelect) return; typeSelect.innerHTML = '<option value="">Tất cả</option>'; warehouseSelect.innerHTML = '<option value="">Tất cả</option>'; types.forEach(t => typeSelect.add(new Option(t, t))); warehouses.forEach(w => warehouseSelect.add(new Option(w, w))); };
+        function renderShoppingTable(data) { if (!data || !Array.isArray(data.chiphi) || !Array.isArray(data.chiphiChitiet)) return; const { chiphi, chiphiChitiet } = data; const fromDate = document.getElementById('shopping-from-date').value; const toDate = document.getElementById('shopping-to-date').value; const content = document.getElementById('shopping-content-filter').value.toLowerCase(); const type = document.getElementById('shopping-type-filter').value; const warehouse = document.getElementById('shopping-warehouse-filter').value; const spenderMap = chiphi.reduce((map, item) => { map[item.ID] = item.Nguoilap; return map; }, {}); let filteredData = chiphiChitiet.filter(item => { const itemDate = item.Ngaychi ? item.Ngaychi.split(' ')[0] : null; return (!fromDate || (itemDate && itemDate >= fromDate)) && (!toDate || (itemDate && itemDate <= toDate)) && (!content || (item.NoiDung || '').toLowerCase().includes(content)) && (!type || item.LoaiChiPhi === type) && (!warehouse || item.Ten_Kho === warehouse); }); const sortState = sortStates.shopping; if (sortState.column) { filteredData.sort((a, b) => { let valA = a[sortState.column]; let valB = b[sortState.column]; let comparison = 0; const numericColumns = ['SoLuong', 'Dongia', 'SoTien']; if (numericColumns.includes(sortState.column)) { comparison = (parseFloat(valA) || 0) - (parseFloat(valB) || 0); } else if (sortState.column === 'Ngaychi') { comparison = (new Date(valA).getTime() || 0) - (new Date(valB).getTime() || 0); } else { comparison = (valA || '').toString().localeCompare((valB || '').toString(), 'vi'); } return sortState.direction === 'asc' ? comparison : -comparison; }); } const tbody = document.getElementById('shopping-table-body'); if(tbody) tbody.innerHTML = filteredData.map((item, index) => `<tr><td>${index + 1}</td><td>${item.NoiDung || ''}</td><td>${item.LoaiChiPhi || ''}</td><td>${item.Ten_Kho || ''}</td><td>${formatDate(item.Ngaychi)}</td><td class="text-center">${item.SoLuong || 0}</td><td class="text-end">${formatCurrency(parseFloat(item.Dongia) || 0)}</td><td class="text-end">${formatCurrency(parseFloat(item.SoTien) || 0)}</td><td>${spenderMap[item.ID_ChiPhi] || ''}</td></tr>`).join(''); updateSortIcons('shopping'); }
+        
+        function ensureHrData(callback) { if (hrDataCache) { if(callback) callback(hrDataCache); } else { runApiCall('getBusinessData', { business: 'hr' }, data => { if(data.error) { alert(data.error); return; } hrDataCache = data; if (callback) callback(hrDataCache); }); } }
+        
+        function populateHrFilters(viewId, users) { 
+            if (!users || !Array.isArray(users)) return;
+            const departmentSelect = document.getElementById(`${viewId}-department-filter`);
+            const positionSelect = document.getElementById(`${viewId}-position-filter`);
+            const employeeSelect = document.getElementById(`${viewId}-employee-filter`);
+            if (departmentSelect) {
+                const departments = [...new Set(users.map(u => u['Bộ phận']).filter(Boolean))];
+                departmentSelect.innerHTML = '<option value="">Tất cả Bộ phận</option>';
+                departments.forEach(d => departmentSelect.add(new Option(d, d)));
+            }
+            if (positionSelect) {
+                const positions = [...new Set(users.map(u => u['Chức vụ']).filter(Boolean))];
+                positionSelect.innerHTML = '<option value="">Tất cả Chức vụ</option>';
+                positions.forEach(p => positionSelect.add(new Option(p, p)));
+            }
+            if (employeeSelect) {
+                employeeSelect.innerHTML = '<option value="">Tất cả Nhân viên</option>';
+                users.sort((a, b) => (a['Họ và tên'] || '').localeCompare(b['Họ và tên'] || '', 'vi'));
+                users.forEach(u => employeeSelect.add(new Option(u['Họ và tên'], u.ID)));
+            }
+        }
+        
+        let currentPayrollData = [];
+        let khoMap = {}; 
+        function initializePayrollView() { if (document.getElementById('payroll-view')?.dataset.initialized) return; payrollDetailModal = new bootstrap.Modal(document.getElementById('payrollDetailModal')); const monthSelect = document.getElementById('payroll-month-filter'); const yearSelect = document.getElementById('payroll-year-filter'); const now = new Date(), currentYear = now.getFullYear(), currentMonth = now.getMonth() + 1; for (let i = 1; i <= 12; i++) monthSelect.add(new Option(i, i)); for (let i = currentYear; i >= currentYear - 5; i--) yearSelect.add(new Option(i, i)); monthSelect.value = currentMonth; yearSelect.value = currentYear; document.getElementById('apply-payroll-filter').addEventListener('click', () => renderPayrollTable(hrDataCache)); document.getElementById('reset-payroll-filter').addEventListener('click', () => { monthSelect.value = currentMonth; yearSelect.value = currentYear; document.getElementById('payroll-department-filter').selectedIndex = 0; document.getElementById('payroll-position-filter').selectedIndex = 0; renderPayrollTable(hrDataCache); }); ensureHrData(data => { populateHrFilters('payroll', data.users); if (data.dsKho) { data.dsKho.forEach(kho => { khoMap[kho['ID kho']] = kho['Tên kho']; }); } renderPayrollTable(data); }); if(document.getElementById('payroll-view')) document.getElementById('payroll-view').dataset.initialized = 'true'; };
+        function renderPayrollTable(data) { if (!data || !Array.isArray(data.users)) return; const month = parseInt(document.getElementById('payroll-month-filter').value); const year = parseInt(document.getElementById('payroll-year-filter').value); const department = document.getElementById('payroll-department-filter').value; const position = document.getElementById('payroll-position-filter').value; document.getElementById('payroll-title').textContent = `BẢNG LƯƠNG CHI TIẾT THÁNG ${month}/${year}`; let filteredUsers = data.users.filter(user => (!department || user['Bộ phận'] === department) && (!position || user['Chức vụ'] === position)); const daysInMonth = new Date(year, month, 0).getDate(); const userDailyWages = {}; filteredUsers.forEach(user => { userDailyWages[user.ID] = Array(daysInMonth + 1).fill(0); }); (data.chamCong || []).forEach(rec => { const recDate = new Date(rec.Ngày); if (recDate.getFullYear() === year && (recDate.getMonth() + 1) === month) { if (userDailyWages[rec.ID_NhanVien]) { userDailyWages[rec.ID_NhanVien][recDate.getDate()] = parseFloat(rec.TienCongNgay) || 0; } } }); currentPayrollData = filteredUsers.map((user, index) => { const userId = user.ID; const chamCongUser = (data.chamCong || []).filter(c => c.ID_NhanVien === userId && new Date(c.Ngày).getMonth() + 1 === month && new Date(c.Ngày).getFullYear() === year); const giaoDichUser = (data.giaoDichLuong || []).filter(g => g.ID_NhanVien === userId && new Date(g.NgayGiaoDich).getMonth() + 1 === month && new Date(g.NgayGiaoDich).getFullYear() === year); const sumTienCong = chamCongUser.reduce((sum, r) => sum + (parseFloat(r.TienCongNgay) || 0) + (parseFloat(r.TienTangCaNgay) || 0), 0); const sumGioTangCa = chamCongUser.reduce((sum, r) => sum + (parseFloat(r.SoGioTangCa) || 0), 0); const sumNgayCong = chamCongUser.reduce((sum, r) => sum + ((parseFloat(r.SoGioCong) || 0) / 8), 0); const workLocations = [...new Set(chamCongUser.map(c => khoMap[c.Kholamviec] || c.Kholamviec).filter(Boolean))].join(', '); const getSumGiaoDich = (type) => giaoDichUser.filter(g => g.LoaiGiaoDich === type).reduce((sum, r) => sum + (parseFloat(r.SoTien) || 0), 0); const ung = getSumGiaoDich('Tạm ứng'); const bhyt = getSumGiaoDich('BHYT'); const thuong = getSumGiaoDich('Thưởng'); const phuCap = getSumGiaoDich('Phụ cấp'); const khauTru = ung + bhyt; const ngansachdauky = parseFloat(user.Ngansachdauky) || 0; const thucLinh = (sumTienCong + thuong + phuCap) - (ung + bhyt + ngansachdauky); return { stt: index + 1, id: user.ID, name: user['Họ và tên'], dailyWages: userDailyWages[userId], sumTienCong, sumGioTangCa, sumNgayCong, ung, bhyt, thuong, phuCap, khauTru, thucLinh, ngansachdauky, workLocations }; }); const sortState = sortStates.payroll; if (sortState.column) { currentPayrollData.sort((a, b) => { let valA = a[sortState.column]; let valB = b[sortState.column]; let comparison = (typeof valA === 'string') ? (valA || '').localeCompare(valB || '', 'vi') : (valA || 0) - (valB || 0); return sortState.direction === 'asc' ? comparison : -comparison; }); } const thead = document.querySelector('#payroll-view thead tr'); if(!thead) return; let headerHtml = `<th class="sortable-header sticky-header sticky-col first-col top-left-corner" data-sort-key="stt">TT <i class="fas fa-sort sort-icon"></i></th><th class="sortable-header sticky-header sticky-col second-col top-left-corner text-start" data-sort-key="name">Họ và tên <i class="fas fa-sort sort-icon"></i></th>`; for (let day = 1; day <= daysInMonth; day++) { headerHtml += `<th class="sticky-header">${day}</th>`; } const summaryHeaders = { 'sumTienCong': '∑ tiền công', 'sumGioTangCa': '∑ Giờ tăng ca', 'sumNgayCong': '∑ ngày công', 'ung': 'Ứng', 'bhyt': 'BHYT', 'thuong': 'Thưởng', 'phuCap': 'Phụ cấp', 'khauTru': 'Khấu trừ', 'thucLinh': 'Thực lĩnh' }; for (const [key, title] of Object.entries(summaryHeaders)) { headerHtml += `<th class="sortable-header sticky-header text-end" data-sort-key="${key}">${title} <i class="fas fa-sort sort-icon"></i></th>`; } thead.innerHTML = headerHtml; const tbody = document.getElementById('payroll-table-body'); if (tbody) { tbody.innerHTML = currentPayrollData.map(emp => { let dailyWagesHtml = emp.dailyWages.slice(1).map(wage => `<td class="text-end">${wage > 0 ? wage.toLocaleString('vi-VN') : ''}</td>`).join(''); return `<tr><td class="sticky-col first-col">${emp.stt}</td><td class="text-start sticky-col second-col"><a href="#" class="employee-name-clickable" data-userid="${emp.id}">${emp.name}</a></td>${dailyWagesHtml}<td class="text-end fw-bold">${formatCurrency(emp.sumTienCong)}</td><td class="text-center">${emp.sumGioTangCa.toFixed(2)}</td><td class="text-center">${emp.sumNgayCong.toFixed(2)}</td><td class="text-end">${formatCurrency(emp.ung)}</td><td class="text-end">${formatCurrency(emp.bhyt)}</td><td class="text-end">${formatCurrency(emp.thuong)}</td><td class="text-end">${formatCurrency(emp.phuCap)}</td><td class="text-end">${formatCurrency(emp.khauTru)}</td><td class="text-end fw-bold bg-light">${formatCurrency(emp.thucLinh)}</td></tr>`; }).join(''); } updateSortIcons('payroll'); };
+        function showPayrollDetailModal(userId) { const empData = currentPayrollData.find(emp => emp.id === userId); if (!empData) return; const month = document.getElementById('payroll-month-filter').value; const year = document.getElementById('payroll-year-filter').value; document.getElementById('modal-employee-name').textContent = empData.name; document.getElementById('modal-payroll-period').textContent = `Tháng ${month}/${year}`; document.getElementById('modal-work-location').textContent = empData.workLocations || 'Chưa có dữ liệu'; document.getElementById('modal-sum-ngay-cong').textContent = `${empData.sumNgayCong.toFixed(2)} công`; document.getElementById('modal-sum-gio-tang-ca').textContent = `${empData.sumGioTangCa.toFixed(2)} giờ`; document.getElementById('modal-sum-tien-cong').textContent = formatCurrency(empData.sumTienCong); document.getElementById('modal-thuong').textContent = formatCurrency(empData.thuong); document.getElementById('modal-phu-cap').textContent = formatCurrency(empData.phuCap); document.getElementById('modal-ung').textContent = formatCurrency(empData.ung); document.getElementById('modal-bhyt').textContent = formatCurrency(empData.bhyt); document.getElementById('modal-khau-tru-khac').textContent = formatCurrency(empData.ngansachdauky); document.getElementById('modal-thuc-linh').textContent = formatCurrency(empData.thucLinh); payrollDetailModal.show(); }
+        
+        document.getElementById('export-payroll-detail')?.addEventListener('click', () => { const modalContent = document.getElementById('payroll-modal-content'); const employeeName = document.getElementById('modal-employee-name').textContent.trim().replace(/\s+/g, '_'); const month = document.getElementById('payroll-month-filter').value; const year = document.getElementById('payroll-year-filter').value; const fileName = `PhieuLuong_${employeeName}_${month}_${year}.jpg`; showLoader(true); html2canvas(modalContent, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }).then(canvas => { const image = canvas.toDataURL("image/jpeg", 0.9); const link = document.createElement('a'); link.href = image; link.download = fileName; document.body.appendChild(link); link.click(); document.body.removeChild(link); showLoader(false); }).catch(err => { console.error("Lỗi khi xuất ảnh:", err); alert("Đã có lỗi xảy ra khi xuất file ảnh."); showLoader(false); }); });
+        function initializeAttendanceView() { if (document.getElementById('attendance-view')?.dataset.initialized) return; const monthSelect = document.getElementById('attendance-month-filter'); const yearSelect = document.getElementById('attendance-year-filter'); const now = new Date(), currentYear = now.getFullYear(), currentMonth = now.getMonth() + 1; for (let i = 1; i <= 12; i++) monthSelect.add(new Option(i, i)); for (let i = currentYear; i >= currentYear - 5; i--) yearSelect.add(new Option(i, i)); monthSelect.value = currentMonth; yearSelect.value = currentYear; document.getElementById('apply-attendance-filter').addEventListener('click', () => renderAttendanceTable(hrDataCache)); document.getElementById('reset-attendance-filter').addEventListener('click', () => { monthSelect.value = currentMonth; yearSelect.value = currentYear; document.getElementById('attendance-department-filter').selectedIndex = 0; document.getElementById('attendance-position-filter').selectedIndex = 0; document.getElementById('attendance-employee-filter').selectedIndex = 0; renderAttendanceTable(hrDataCache); }); ensureHrData(data => { populateHrFilters('attendance', data.users); renderAttendanceTable(data); }); if(document.getElementById('attendance-view')) document.getElementById('attendance-view').dataset.initialized = 'true'; }
+        function renderAttendanceTable(data) {
+            if (!data || !Array.isArray(data.users) || !Array.isArray(data.chamCong)) return;
+            const month = parseInt(document.getElementById('attendance-month-filter').value);
+            const year = parseInt(document.getElementById('attendance-year-filter').value);
+            const department = document.getElementById('attendance-department-filter').value;
+            const position = document.getElementById('attendance-position-filter').value;
+            const employeeId = document.getElementById('attendance-employee-filter').value;
+            document.getElementById('attendance-title').textContent = `BẢNG CHẤM CÔNG THÁNG ${month}/${year}`;
+            let filteredUsers = data.users.filter(user => 
+                (!department || user['Bộ phận'] === department) && 
+                (!position || user['Chức vụ'] === position) &&
+                (!employeeId || user.ID === employeeId)
+            );
+            const daysInMonth = new Date(year, month, 0).getDate();
+            
+            let attendanceData = filteredUsers.map((user, index) => {
+                const attendance = { stt: index + 1, id: user.ID, name: user['Họ và tên'] || 'N/A', days: {}, totalHours: 0, overtimeHours: 0, workDays: 0 };
+                const userChamCong = data.chamCong.filter(rec => (rec.ID_NhanVien === user.ID) && new Date(rec.Ngày).getFullYear() === year && (new Date(rec.Ngày).getMonth() + 1) === month);
+                userChamCong.forEach(rec => {
+                    const dayOfMonth = new Date(rec.Ngày).getDate();
+                    const workHours = parseFloat(rec['SoGioCong']) || 0;
+                    const overtime = parseFloat(rec['SoGioTangCa']) || 0;
+                    if (workHours > 0 || overtime > 0) {
+                        attendance.days[dayOfMonth] = (workHours > 0 ? `${workHours}` : '') + (overtime > 0 ? `<br><b class='text-danger'>${overtime}</b>` : '');
+                    }
+                    attendance.totalHours += workHours + overtime;
+                    attendance.overtimeHours += overtime;
+                    if (workHours > 0) attendance.workDays += (workHours / 8);
+                });
+                return attendance;
+            });
+
+            const sortState = sortStates.attendance;
+            if (sortState.column) {
+                attendanceData.sort((a, b) => {
+                    let valA = a[sortState.column];
+                    let valB = b[sortState.column];
+                    let comparison = (typeof valA === 'string') ? (valA || '').localeCompare(valB || '', 'vi') : (valA || 0) - (valB || 0);
+                    return sortState.direction === 'asc' ? comparison : -comparison;
+                });
+            }
+            const thead = document.querySelector('#attendance-view thead tr');
+            if(!thead) return;
+            let headerHtml = `<th class="sortable-header sticky-header sticky-col first-col top-left-corner" data-sort-key="stt">TT <i class="fas fa-sort sort-icon"></i></th><th class="sortable-header sticky-header sticky-col second-col top-left-corner text-start" data-sort-key="name">Họ và tên <i class="fas fa-sort sort-icon"></i></th>`;
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month - 1, day);
+                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                const weekendStyle = isWeekend ? `background-color: var(--weekend-bg) !important; color: #a28b00;` : '';
+                headerHtml += `<th class="sticky-header" style="${weekendStyle}">${day}</th>`;
+            }
+            headerHtml += `<th class="sortable-header sticky-header" data-sort-key="workDays">∑ ngày công <i class="fas fa-sort sort-icon"></i></th><th class="sortable-header sticky-header" data-sort-key="overtimeHours">∑ Giờ tăng ca <i class="fas fa-sort sort-icon"></i></th>`;
+            thead.innerHTML = headerHtml;
+
+            const tbody = document.getElementById('attendance-table-body');
+            if (tbody) {
+                tbody.innerHTML = attendanceData.map((emp) => {
+                    let daysHtml = '';
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        const date = new Date(year, month - 1, day);
+                        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                        const weekendStyle = isWeekend ? `background-color: var(--weekend-bg);` : '';
+                        daysHtml += `<td style="${weekendStyle}">${emp.days[day] || ''}</td>`;
+                    }
+                    return `<tr><td class="sticky-col first-col">${emp.stt}</td><td class="text-start sticky-col second-col">${emp.name}</td>${daysHtml}<td class="fw-bold">${emp.workDays.toFixed(2)}</td><td class="fw-bold text-danger">${emp.overtimeHours.toFixed(2)}</td></tr>`;
+                }).join('');
+            }
+            updateSortIcons('attendance');
+        }
+        
+        // --- CÁC HÀM XỬ LÝ NGHIỆP VỤ KHO (KHÔNG THAY ĐỔI) ---
+        function ensureInventoryData(callback) { if (inventoryDataCache) { if (callback) callback(inventoryDataCache); } else { runApiCall('getInventoryData', {}, data => { if (data.error) { alert(data.error); return; } inventoryDataCache = data; if (callback) callback(inventoryDataCache); }); } }
+        function initializeInventoryImportView() { if (document.getElementById('inventory-import-view')?.dataset.initialized) return; ensureInventoryData(data => renderInventoryVoucherTable('Nhập', data)); if(document.getElementById('inventory-import-view')) document.getElementById('inventory-import-view').dataset.initialized = 'true'; }
+        function initializeInventoryExportView() { if (document.getElementById('inventory-export-view')?.dataset.initialized) return; ensureInventoryData(data => renderInventoryVoucherTable('Xuất', data)); if(document.getElementById('inventory-export-view')) document.getElementById('inventory-export-view').dataset.initialized = 'true'; }
+        function initializeInventoryStockView() { if (document.getElementById('inventory-stock-view')?.dataset.initialized) return; ensureInventoryData(data => { populateInventoryFilters(data); renderInventoryStockTable(data); document.getElementById('apply-stock-filter')?.addEventListener('click', () => renderInventoryStockTable(inventoryDataCache)); }); if(document.getElementById('inventory-stock-view')) document.getElementById('inventory-stock-view').dataset.initialized = 'true'; }
+        function renderInventoryVoucherTable(type, data) { const tableBodyId = (type === 'Nhập') ? 'import-table-body' : 'export-table-body'; const tbody = document.getElementById(tableBodyId); if (!tbody || !data || !data.phieuNhapXuat) return; const { phieuNhapXuat } = data; const filteredVouchers = phieuNhapXuat.filter(v => v['Loại nhập xuất'] === type); tbody.innerHTML = filteredVouchers.map(v => `<tr><td>${v['Mã nhập xuất'] || ''}</td><td>${formatDate(v['Ngày'])}</td><td>${v['Kho'] || ''}</td><td>${v['Người giao nhận'] || ''}</td><td>${v['Diễn giải'] || ''}</td><td class="text-end">${formatCurrency(parseFloat(v['Tổng tiền']) || 0)}</td><td><span class="badge bg-success">${v['Trangthai'] || ''}</span></td></tr>`).join(''); }
+        function populateInventoryFilters(data) { if (!data) return; const { dsKho, vatLieu } = data; const warehouseSelect = document.getElementById('stock-warehouse-filter'); if (warehouseSelect && dsKho) { warehouseSelect.innerHTML = '<option value="">Tất cả kho</option>'; dsKho.forEach(kho => warehouseSelect.add(new Option(kho['Tên kho'], kho['Tên kho']))); } const groupSelect = document.getElementById('stock-group-filter'); if (groupSelect && vatLieu) { const groups = [...new Set(vatLieu.map(item => item['Nhóm vật liệu']).filter(Boolean))]; groupSelect.innerHTML = '<option value="">Tất cả nhóm</option>'; groups.forEach(g => groupSelect.add(new Option(g, g))); } }
+        function renderInventoryStockTable(data) { if (!data || !data.pnxChiTiet || !data.vatLieu) { console.error("Dữ liệu tồn kho không đủ."); return; } const warehouseFilter = document.getElementById('stock-warehouse-filter')?.value; const groupFilter = document.getElementById('stock-group-filter')?.value; const materialFilter = document.getElementById('stock-material-filter')?.value.toLowerCase(); const stockPerWarehouse = {}; data.pnxChiTiet.forEach(detail => { const materialId = detail['Mã vật liệu']; const warehouseName = detail['Tên kho']; if (!materialId || !warehouseName) return; if (!stockPerWarehouse[warehouseName]) { stockPerWarehouse[warehouseName] = {}; } if (!stockPerWarehouse[warehouseName][materialId]) { stockPerWarehouse[warehouseName][materialId] = 0; } const quantity = parseFloat(detail['Soluong NX']) || 0; if (detail['Loại nhập xuất'] === 'Nhập') { stockPerWarehouse[warehouseName][materialId] += quantity; } else if (detail['Loại nhập xuất'] === 'Xuất') { stockPerWarehouse[warehouseName][materialId] -= quantity; } }); let filteredVatLieu = data.vatLieu.filter(vl => (!groupFilter || vl['Nhóm vật liệu'] === groupFilter) && (!materialFilter || (vl['Tên vật liệu'] || '').toLowerCase().includes(materialFilter))); const displayData = []; filteredVatLieu.forEach(vl => { const materialId = vl['ID vật liệu']; let totalStock = 0; if (warehouseFilter) { totalStock = (stockPerWarehouse[warehouseFilter] && stockPerWarehouse[warehouseFilter][materialId]) || 0; } else { for (const whName in stockPerWarehouse) { totalStock += (stockPerWarehouse[whName][materialId] || 0); } } if (totalStock !== 0 || (warehouseFilter==='' && groupFilter==='' && materialFilter==='')) { displayData.push({ id: materialId, name: vl['Tên vật liệu'], group: vl['Nhóm vật liệu'], unit: vl['Đơn vị tính'], quantity: totalStock }); } }); const tbody = document.getElementById('stock-table-body'); if (tbody) { tbody.innerHTML = displayData.map(item => `<tr><td>${item.id || ''}</td><td>${item.name || ''}</td><td>${item.group || ''}</td><td>${item.unit || ''}</td><td class="text-end fw-bold">${item.quantity.toLocaleString('vi-VN')}</td></tr>`).join(''); } }
+        
+        function exportToExcel(viewId) {
+            let data, headers, sheetName, fileName;
+            const month = document.getElementById(`${viewId}-month-filter`).value;
+            const year = document.getElementById(`${viewId}-year-filter`).value;
+            const daysInMonth = new Date(year, month, 0).getDate();
+            
+            if (viewId === 'payroll') {
+                fileName = `BangLuong_${month}-${year}.xlsx`;
+                sheetName = 'BangLuong';
+                const dailyHeaders = [];
+                for (let i = 1; i <= daysInMonth; i++) { dailyHeaders.push(`Ngày ${i}`); }
+                headers = [ 'TT', 'Họ và tên', ...dailyHeaders, '∑ tiền công', '∑ Giờ tăng ca', '∑ ngày công', 'Ứng', 'BHYT', 'Thưởng', 'Phụ cấp', 'Khấu trừ', 'Thực lĩnh' ];
+                data = currentPayrollData.map((emp, index) => { const row = [index + 1, emp.name]; for(let i = 1; i <= daysInMonth; i++) { const wage = emp.dailyWages[i]; row.push(wage > 0 ? wage : '-'); } row.push(emp.sumTienCong, emp.sumGioTangCa, emp.sumNgayCong, emp.ung, emp.bhyt, emp.thuong, emp.phuCap, emp.khauTru, emp.thucLinh); return row; });
+            } else if (viewId === 'attendance') {
+                fileName = `ChamCong_${month}-${year}.xlsx`;
+                sheetName = 'ChamCong';
+                headers = ['TT', 'Họ và tên'];
+                for (let i = 1; i <= daysInMonth; i++) { headers.push(`Ngày ${i}`); }
+                headers.push('∑ ngày công', '∑ Giờ tăng ca');
+                const tableBody = document.getElementById('attendance-table-body');
+                data = Array.from(tableBody.querySelectorAll('tr')).map(tr => { return Array.from(tr.querySelectorAll('td')).map(td => { const text = td.innerText.replace(/\n/g, ' '); return text.trim() === '' ? '-' : text; }); });
+            } else { return; }
+
+            const ws_data = [headers, ...data];
+            const ws = XLSX.utils.aoa_to_sheet(ws_data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            XLSX.writeFile(wb, fileName);
+        }
+
+        function loadViewContent(viewId) { 
+            const view = document.getElementById(viewId);
+            if (!view || view.dataset.loaded) return; 
+            let htmlContent = ''; 
+            switch(viewId) { 
+                case 'overview-view': 
+                    // --- CẬP NHẬT: Thêm container cho các nút bấm tháng của biểu đồ nhân sự ---
+                    htmlContent = `<div class="row g-4 mb-4"><div class="col-sm-6 col-lg-3"><div class="card kpi-card bg-primary text-white"><div class="card-body"><h6 class="card-subtitle">Tổng nhân sự</h6><h4 class="card-title fw-bold" id="total-employees">...</h4></div></div></div><div class="col-sm-6 col-lg-3"><div class="card kpi-card bg-info text-white"><div class="card-body"><h6 class="card-subtitle">Nhân sự hoạt động</h6><h4 class="card-title fw-bold" id="active-employees">...</h4></div></div></div><div class="col-sm-6 col-lg-3"><div class="card kpi-card bg-danger text-white"><div class="card-body"><h6 class="card-subtitle">Nhân sự chưa chấm công</h6><h4 class="card-title fw-bold" id="inactive-personnel">...</h4></div></div></div><div class="col-sm-6 col-lg-3"><div class="card kpi-card bg-success text-white"><div class="card-body"><h6 class="card-subtitle">Tổng chi phí</h6><h4 class="card-title fw-bold" id="total-expenses">...</h4></div></div></div></div><div class="row g-4"><div class="col-lg-7"><div class="card shadow-sm h-100"><div class="card-header fw-bold">Ngân sách theo Kho</div><div class="card-body" style="min-height: 300px;"><canvas id="warehouse-budget-chart"></canvas></div></div></div><div class="col-lg-5"><div class="card shadow-sm h-100"><div class="card-header fw-bold d-flex justify-content-between align-items-center"><span>Nhân sự theo Kho</span><div id="personnel-chart-buttons" class="btn-group btn-group-sm"></div></div><div class="card-body" style="min-height: 300px;"><canvas id="warehouse-personnel-chart"></canvas></div></div></div></div><div class="row g-4 mt-1"><div class="col-lg-12"><div class="card shadow-sm h-100"><div class="card-header fw-bold">Tình hình đi làm hôm nay</div><div class="card-body d-flex justify-content-center" style="min-height: 250px;"><div style="max-width: 250px;"><canvas id="daily-attendance-chart"></canvas></div></div></div></div></div>`;
+                    break; 
+                case 'api-manager-view': htmlContent = `<div class="card shadow-sm"><div class="card-header fw-bold"><i class="fas fa-cogs"></i> Bảng điều khiển API</div><div class="card-body text-center"><div class="btn-group flex-wrap" role="group"><button onclick="runApiCall('getAll', {}, displayJson)" class="btn btn-outline-success m-1">Lấy Tất Cả</button><button onclick="runApiCall('getUserData', {}, displayJson)" class="btn btn-outline-info m-1">Dữ Liệu Users</button></div></div></div><div class="card shadow-sm mt-4"><div class="card-header fw-bold"><i class="fas fa-file-code"></i> Kết quả API (JSON)</div><div class="card-body"><pre id="json-result-area" class="bg-light p-2 rounded" style="white-space: pre-wrap; word-break: break-all;">Chọn một hành động để xem kết quả...</pre></div></div>`;
+                    break; 
+                case 'payroll-view': 
+                    htmlContent = `<div class="card shadow-sm"><div class="card-header"><h5 class="mb-0" id="payroll-title">BẢNG LƯƠNG CHI TIẾT</h5></div><div class="card-body"><div class="row g-3 align-items-end flex-wrap mb-3"><div class="col-auto"><label class="form-label">Tháng</label><select class="form-select" id="payroll-month-filter"></select></div><div class="col-auto"><label class="form-label">Năm</label><select class="form-select" id="payroll-year-filter"></select></div><div class="col-auto"><label class="form-label">Bộ phận</label><select class="form-select" id="payroll-department-filter"><option value="">Tất cả</option></select></div><div class="col-auto"><label class="form-label">Chức vụ</label><select class="form-select" id="payroll-position-filter"><option value="">Tất cả</option></select></div><div class="col-auto"><button class="btn btn-primary" id="apply-payroll-filter"><i class="fas fa-filter"></i> Lọc</button></div><div class="col-auto"><button class="btn btn-secondary" id="reset-payroll-filter"><i class="fas fa-sync-alt"></i> Reset</button></div><div class="col-auto"><button class="btn btn-success" onclick="exportToExcel('payroll')"><i class="fas fa-file-excel"></i> Xuất Excel</button></div></div><div class="table-responsive"><table class="table table-bordered table-striped table-hover"><thead class="table-dark"><tr id="payroll-header-row"></tr></thead><tbody id="payroll-table-body"></tbody></table></div></div></div>`;
+                    break; 
+                case 'attendance-view': 
+                    htmlContent = `<div class="card shadow-sm"><div class="card-header"><h5 class="mb-0" id="attendance-title">BẢNG CHẤM CÔNG</h5></div><div class="card-body"><div class="row g-3 align-items-end flex-wrap mb-3"><div class="col-auto"><label class="form-label">Tháng</label><select class="form-select" id="attendance-month-filter"></select></div><div class="col-auto"><label class="form-label">Năm</label><select class="form-select" id="attendance-year-filter"></select></div><div class="col-auto"><label class="form-label">Bộ phận</label><select class="form-select" id="attendance-department-filter"><option value="">Tất cả</option></select></div><div class="col-auto"><label class="form-label">Chức vụ</label><select class="form-select" id="attendance-position-filter"><option value="">Tất cả</option></select></div><div class="col-auto"><label class="form-label">Nhân viên</label><select class="form-select" id="attendance-employee-filter"><option value="">Tất cả</option></select></div><div class="col-auto"><button class="btn btn-primary" id="apply-attendance-filter"><i class="fas fa-filter"></i> Lọc</button></div><div class="col-auto"><button class="btn btn-secondary" id="reset-attendance-filter"><i class="fas fa-sync-alt"></i> Reset</button></div><div class="col-auto"><button class="btn btn-success" onclick="exportToExcel('attendance')"><i class="fas fa-file-excel"></i> Xuất Excel</button></div></div><div class="table-responsive"><table class="table table-bordered table-striped table-hover"><thead class="table-dark"><tr id="attendance-header-row"></tr></thead><tbody id="attendance-table-body"></tbody></table></div></div></div>`; 
+                    break; 
+                case 'shopping-view': htmlContent = `<div class="card shadow-sm"><div class="card-header"><h5 class="mb-0">BẢNG KÊ CHI TIẾT CHI PHÍ MUA SẮM</h5></div><div class="card-body"><div class="d-flex flex-wrap gap-2 align-items-end border p-3 rounded mb-3"><div><label class="form-label">Từ ngày</label><input type="date" id="shopping-from-date" class="form-control"></div><div><label class="form-label">Đến ngày</label><input type="date" id="shopping-to-date" class="form-control"></div><div><label class="form-label">Nội dung</label><input type="text" id="shopping-content-filter" class="form-control" placeholder="Tìm nội dung..."></div><div><label class="form-label">Loại chi phí</label><select id="shopping-type-filter" class="form-select"><option value="">Tất cả</option></select></div><div><label class="form-label">Tên kho</label><select id="shopping-warehouse-filter" class="form-select"><option value="">Tất cả</option></select></div><div><button class="btn btn-primary" id="apply-shopping-filter"><i class="fas fa-filter"></i> Lọc</button></div><div><button class="btn btn-secondary" id="reset-shopping-filter"><i class="fas fa-sync-alt"></i> Reset</button></div></div><div class="table-responsive"><table class="table table-bordered table-striped table-hover"><thead class="table-dark sticky-top"><tr id="shopping-header-row"></tr></thead><tbody id="shopping-table-body"></tbody></table></div></div></div>`;
+                    break; 
+                case 'inventory-import-view':
+                    htmlContent = `<div class="card shadow-sm"><div class="card-header"><h5 class="mb-0">DANH SÁCH PHIẾU NHẬP KHO</h5></div><div class="card-body"><div class="table-responsive"><table class="table table-bordered table-hover"><thead class="table-dark"><tr><th>Mã phiếu</th><th>Ngày</th><th>Kho</th><th>Người giao nhận</th><th>Diễn giải</th><th>Tổng tiền</th><th>Trạng thái</th></tr></thead><tbody id="import-table-body"></tbody></table></div></div></div>`;
+                    break;
+                case 'inventory-export-view':
+                    htmlContent = `<div class="card shadow-sm"><div class="card-header"><h5 class="mb-0">DANH SÁCH PHIẾU XUẤT KHO</h5></div><div class="card-body"><div class="table-responsive"><table class="table table-bordered table-hover"><thead class="table-dark"><tr><th>Mã phiếu</th><th>Ngày</th><th>Kho</th><th>Người giao nhận</th><th>Diễn giải</th><th>Tổng tiền</th><th>Trạng thái</th></tr></thead><tbody id="export-table-body"></tbody></table></div></div></div>`;
+                    break;
+                case 'inventory-stock-view':
+                    htmlContent = `<div class="card shadow-sm"><div class="card-header"><h5 class="mb-0">BÁO CÁO TỒN KHO</h5></div><div class="card-body"><div class="row g-3 align-items-end flex-wrap mb-3"><div class="col-md-3"><label class="form-label">Kho</label><select class="form-select" id="stock-warehouse-filter"></select></div><div class="col-md-3"><label class="form-label">Nhóm vật liệu</label><select class="form-select" id="stock-group-filter"></select></div><div class="col-md-4"><label class="form-label">Tên vật liệu</label><input type="text" id="stock-material-filter" class="form-control" placeholder="Tìm theo tên vật liệu..."></div><div class="col-md-2"><button class="btn btn-primary w-100" id="apply-stock-filter"><i class="fas fa-filter"></i> Lọc</button></div></div><div class="table-responsive"><table class="table table-bordered table-hover"><thead class="table-dark"><tr><th>ID Vật liệu</th><th>Tên Vật liệu</th><th>Nhóm</th><th>Đơn vị tính</th><th class="text-end">Tồn kho</th></tr></thead><tbody id="stock-table-body"></tbody></table></div></div></div>`;
+                    break;
+            } 
+            if(view) { 
+                view.innerHTML = htmlContent;
+                view.dataset.loaded = 'true'; 
+                if (viewId === 'shopping-view') { const headerRow = document.getElementById('shopping-header-row'); const headers = {'TT':null, 'Nội dung':'NoiDung', 'Loại chi phí':'LoaiChiPhi', 'Tên kho':'Ten_Kho', 'Ngày chi':'Ngaychi', 'Số lượng':'SoLuong', 'Đơn giá':'Dongia', 'Số tiền':'SoTien', 'Người chi':'Nguoilap'}; for (const [title, key] of Object.entries(headers)) { const th = document.createElement('th'); th.innerHTML = `${title} ${key ? '<i class="fas fa-sort sort-icon"></i>' : ''}`; if (key) { th.classList.add('sortable-header'); th.dataset.sortKey = key; } headerRow.appendChild(th); } headerRow.addEventListener('click', (e) => handleSortClick(e, 'shopping', renderShoppingTable, shoppingDataCache)); } 
+                if (viewId === 'attendance-view') { 
+                    document.getElementById('attendance-header-row').addEventListener('click', (e) => handleSortClick(e, 'attendance', renderAttendanceTable, hrDataCache));
+                } 
+                if (viewId === 'payroll-view') { 
+                    document.getElementById('payroll-header-row').addEventListener('click', (e) => handleSortClick(e, 'payroll', renderPayrollTable, hrDataCache));
+                    document.getElementById('payroll-table-body').addEventListener('click', (e) => { const target = e.target.closest('.employee-name-clickable'); if (target) { e.preventDefault(); const userId = target.dataset.userid; showPayrollDetailModal(userId); } });
+                } 
+            } 
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('#sidebar a.nav-link').forEach(link => {
+                link.addEventListener('click', e => {
+                    e.preventDefault();
+                    showView(link.dataset.view);
+                    setActiveLink(link);
+                    closeMobileSidebar();
+                });
+            });
+            setActiveLink(document.querySelector('#sidebar a.nav-link[data-view="overview-view"]'));
+            showView('overview-view');
+        });
+    </script>
+</body>
+</html>

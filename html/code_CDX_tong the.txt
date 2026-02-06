@@ -1,0 +1,789 @@
+/**
+ * Google Apps Script API cho Dashboard Quản Lý Tổng Hợp
+ * 3 Nghiệp vụ chính: Mua sắm, Nhập xuất tồn, Quản lý nhân sự
+ * 
+ * Author: Assistant
+ * Date: 2025
+ */
+
+// === MAIN API ENDPOINT ===
+function doGet(e) {
+  try {
+    // 🔧 FIX: Xử lý trường hợp e hoặc e.parameter undefined
+    const parameter = (e && e.parameter) ? e.parameter : {};
+    const action = parameter.action || 'getAll';
+    
+    console.log('doGet called with action:', action);
+    console.log('Parameters:', parameter);
+    
+    // Xử lý các loại request khác nhau
+    switch (action) {
+      case 'getAll':
+        return getAllData();
+      case 'getBusinessData':
+        return getBusinessData(parameter.business);
+      case 'getUserData':
+        return getUserDataOnly();
+      case 'getStats':
+        return getStatistics();
+      case 'getFiltered':
+        return getFilteredData(parameter);
+      default:
+        return getAllData();
+    }
+    
+  } catch (error) {
+    console.error('Lỗi trong doGet:', error);
+    console.error('Error stack:', error.stack);
+    
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        error: 'Có lỗi xảy ra: ' + error.message,
+        details: error.stack,
+        timestamp: new Date().toISOString()
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// === CONFIGURATION ===
+const CONFIG = {
+  // Cấu hình tên các sheet
+  SHEETS: {
+    // Core tables
+    USER: 'User',
+    
+    // Nghiệp vụ 1: Mua sắm
+    CHIPHI: 'Chiphi',
+    CHIPHI_CHITIET: 'Chiphichitiet',
+    BO_LOC_CHI_PHI: 'BoLocChiPhi',
+    
+    // Nghiệp vụ 2: Nhập xuất tồn
+    PHIEU_NHAP_XUAT: 'PhieuNhapXuat',
+    PNX_CHI_TIET: 'PNXChiTiet',
+    VAT_LIEU: 'VatLieu',
+    DS_KHO: 'DS_kho',
+    TON_KHO: 'Tonkho',
+    PHIEU_CHUYEN_KHO: 'Phieuchuyenkho',
+    CHUYEN_KHO_CHI_TIET: 'Chuyenkhochitiet',
+    DOI_TAC: 'Doitac',
+    LOC_NXT: 'LocNXT',
+    
+    // Nghiệp vụ 3: Quản lý nhân sự
+    CHAM_CONG: 'Chamcong',
+    LICH_SU_LUONG: 'LichSuLuong',
+    GIAO_DICH_LUONG: 'GiaoDichLuong',
+    BANG_LUONG_THANG: 'BangLuongThang',
+    LUONG_PHU_CAP: 'Luongphucap',
+    BAN_GIAO_CONG_CU: 'BanGiaoCongCu',
+    BANG_DIEU_KHIEN_TINH_LUONG: 'BangDieuKhien_TinhLuong',
+    
+    // Support tables
+    DROP: 'Drop',
+    MENU: 'Menu',
+    NOTES: 'Notes',
+    LICH_NHAC: 'LichNhac'
+  }
+};
+
+// === UTILITY FUNCTIONS ===
+
+/**
+ * Lấy spreadsheet hiện tại
+ */
+function getSpreadsheet() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+/**
+ * Kiểm tra sheet có tồn tại
+ */
+function sheetExists(sheetName) {
+  try {
+    const sheet = getSpreadsheet().getSheetByName(sheetName);
+    return sheet !== null;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Chuyển đổi range thành array of objects
+ */
+function rangeToObjects(range, sheetName) {
+  if (!range || range.length === 0) {
+    return [];
+  }
+  
+  const headers = range[0];
+  const dataRows = range.slice(1);
+  
+  return dataRows.map((row, index) => {
+    const obj = {};
+    headers.forEach((header, colIndex) => {
+      let value = row[colIndex];
+      
+      // Xử lý giá trị null/undefined
+      if (value === null || value === undefined) {
+        value = '';
+      }
+      
+      // Chuyển đổi Date
+      if (value instanceof Date) {
+        value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+      }
+      
+      // Xử lý boolean
+      if (typeof value === 'boolean') {
+        value = value;
+      }
+      
+      obj[header] = value;
+    });
+    
+    // Thêm metadata
+    obj._rowIndex = index + 2; // +2 vì bắt đầu từ row 2
+    obj._sheetName = sheetName;
+    
+    return obj;
+  });
+}
+
+/**
+ * Lấy dữ liệu từ sheet với error handling
+ */
+function getDataFromSheet(sheetName, maxRows = null) {
+  try {
+    if (!sheetExists(sheetName)) {
+      console.warn(`Sheet "${sheetName}" không tồn tại.`);
+      return [];
+    }
+    
+    const sheet = getSpreadsheet().getSheetByName(sheetName);
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    
+    if (lastRow <= 1 || lastCol === 0) {
+      console.warn(`Sheet "${sheetName}" trống hoặc chỉ có header.`);
+      return [];
+    }
+    
+    // Xác định số hàng cần lấy
+    const rowsToGet = maxRows ? Math.min(maxRows, lastRow - 1) : lastRow - 1;
+    
+    const range = sheet.getRange(1, 1, rowsToGet + 1, lastCol).getValues();
+    return rangeToObjects(range, sheetName);
+    
+  } catch (error) {
+    console.error(`Lỗi khi lấy dữ liệu từ sheet "${sheetName}":`, error);
+    return [];
+  }
+}
+
+/**
+ * Lọc dữ liệu theo điều kiện (loại bỏ Delete = true)
+ */
+function filterActiveRecords(data) {
+  // 🔧 FIX: Kiểm tra data có tồn tại và là array không
+  if (!data || !Array.isArray(data)) {
+    console.warn('filterActiveRecords: data is not an array:', data);
+    return [];
+  }
+  
+  return data.filter(record => {
+    // Kiểm tra record có tồn tại không
+    if (!record) return false;
+    
+    // Loại bỏ các bản ghi có Delete = true hoặc Delete = 'true'
+    if (record.Delete === true || record.Delete === 'true' || record.Delete === 'TRUE') {
+      return false;
+    }
+    return true;
+  });
+}
+
+// === MAIN DATA RETRIEVAL FUNCTIONS ===
+
+/**
+ * Lấy tất cả dữ liệu từ các sheet
+ */
+function getAllData() {
+  const startTime = new Date().getTime();
+  
+  try {
+    // 🔧 FIX: Thêm error handling cho từng sheet
+    console.log('Bắt đầu lấy dữ liệu từ tất cả sheet...');
+    
+    const allData = {
+      metadata: {
+        timestamp: new Date().toISOString(),
+        totalSheets: 0,
+        loadTime: 0,
+        errors: []
+      },
+      
+      // Core data
+      users: [],
+      
+      // Nghiệp vụ 1: Mua sắm
+      shopping: {
+        chiphi: [],
+        chiphiChitiet: [],
+        boLocChiPhi: []
+      },
+      
+      // Nghiệp vụ 2: Nhập xuất tồn
+      inventory: {
+        phieuNhapXuat: [],
+        pnxChiTiet: [],
+        vatLieu: [],
+        dsKho: [],
+        tonKho: [],
+        phieuChuyenKho: [],
+        chuyenKhoChiTiet: [],
+        doiTac: [],
+        locNXT: []
+      },
+      
+      // Nghiệp vụ 3: Quản lý nhân sự
+      hr: {
+        chamCong: [],
+        lichSuLuong: [],
+        giaoDichLuong: [],
+        bangLuongThang: [],
+        luongPhuCap: [],
+        banGiaoCongCu: [],
+        bangDieuKhienTinhLuong: []
+      },
+      
+      // Support data
+      support: {
+        drop: [],
+        menu: [],
+        notes: [],
+        lichNhac: []
+      }
+    };
+
+    // Lấy dữ liệu User trước (quan trọng nhất)
+    try {
+      console.log('Đang lấy dữ liệu User...');
+      const userData = getDataFromSheet(CONFIG.SHEETS.USER);
+      allData.users = filterActiveRecords(userData);
+      console.log(`✅ User: ${allData.users.length} bản ghi`);
+    } catch (error) {
+      console.error('❌ Lỗi khi lấy dữ liệu User:', error);
+      allData.metadata.errors.push(`User: ${error.message}`);
+    }
+
+    // Lấy dữ liệu Shopping
+    try {
+      console.log('Đang lấy dữ liệu Shopping...');
+      allData.shopping.chiphi = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHIPHI));
+      allData.shopping.chiphiChitiet = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHIPHI_CHITIET));
+      allData.shopping.boLocChiPhi = getDataFromSheet(CONFIG.SHEETS.BO_LOC_CHI_PHI) || [];
+      console.log(`✅ Shopping data loaded`);
+    } catch (error) {
+      console.error('❌ Lỗi khi lấy dữ liệu Shopping:', error);
+      allData.metadata.errors.push(`Shopping: ${error.message}`);
+    }
+
+    // Lấy dữ liệu Inventory
+    try {
+      console.log('Đang lấy dữ liệu Inventory...');
+      allData.inventory.phieuNhapXuat = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.PHIEU_NHAP_XUAT));
+      allData.inventory.pnxChiTiet = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.PNX_CHI_TIET));
+      allData.inventory.vatLieu = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.VAT_LIEU));
+      allData.inventory.dsKho = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.DS_KHO));
+      allData.inventory.tonKho = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.TON_KHO));
+      allData.inventory.phieuChuyenKho = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.PHIEU_CHUYEN_KHO));
+      allData.inventory.chuyenKhoChiTiet = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHUYEN_KHO_CHI_TIET));
+      allData.inventory.doiTac = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.DOI_TAC));
+      allData.inventory.locNXT = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.LOC_NXT));
+      console.log(`✅ Inventory data loaded`);
+    } catch (error) {
+      console.error('❌ Lỗi khi lấy dữ liệu Inventory:', error);
+      allData.metadata.errors.push(`Inventory: ${error.message}`);
+    }
+
+    // Lấy dữ liệu HR
+    try {
+      console.log('Đang lấy dữ liệu HR...');
+      allData.hr.chamCong = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHAM_CONG));
+      allData.hr.lichSuLuong = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.LICH_SU_LUONG));
+      allData.hr.giaoDichLuong = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.GIAO_DICH_LUONG));
+      allData.hr.bangLuongThang = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.BANG_LUONG_THANG));
+      allData.hr.luongPhuCap = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.LUONG_PHU_CAP));
+      allData.hr.banGiaoCongCu = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.BAN_GIAO_CONG_CU));
+      allData.hr.bangDieuKhienTinhLuong = getDataFromSheet(CONFIG.SHEETS.BANG_DIEU_KHIEN_TINH_LUONG) || [];
+      console.log(`✅ HR data loaded`);
+    } catch (error) {
+      console.error('❌ Lỗi khi lấy dữ liệu HR:', error);
+      allData.metadata.errors.push(`HR: ${error.message}`);
+    }
+
+    // Lấy dữ liệu Support
+    try {
+      console.log('Đang lấy dữ liệu Support...');
+      allData.support.drop = getDataFromSheet(CONFIG.SHEETS.DROP) || [];
+      allData.support.menu = getDataFromSheet(CONFIG.SHEETS.MENU) || [];
+      allData.support.notes = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.NOTES));
+      allData.support.lichNhac = getDataFromSheet(CONFIG.SHEETS.LICH_NHAC) || [];
+      console.log(`✅ Support data loaded`);
+    } catch (error) {
+      console.error('❌ Lỗi khi lấy dữ liệu Support:', error);
+      allData.metadata.errors.push(`Support: ${error.message}`);
+    }
+    
+    // Tính toán metadata
+    const endTime = new Date().getTime();
+    allData.metadata.loadTime = endTime - startTime;
+    allData.metadata.totalSheets = Object.keys(CONFIG.SHEETS).length;
+    
+    // Đếm số bản ghi
+    allData.metadata.recordCounts = {
+      users: allData.users.length,
+      shopping: Object.values(allData.shopping).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0),
+      inventory: Object.values(allData.inventory).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0),
+      hr: Object.values(allData.hr).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0),
+      support: Object.values(allData.support).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0)
+    };
+    
+    console.log('✅ Đã tải xong tất cả dữ liệu:', allData.metadata);
+    
+    return ContentService
+      .createTextOutput(JSON.stringify(allData))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    console.error('❌ Lỗi nghiêm trọng trong getAllData:', error);
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        error: 'Lỗi nghiêm trọng khi lấy dữ liệu: ' + error.message,
+        details: error.stack,
+        timestamp: new Date().toISOString()
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Lấy dữ liệu theo nghiệp vụ
+ */
+function getBusinessData(businessType) {
+  const users = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.USER));
+  const userMap = createUserMap(users);
+  
+  let businessData = {};
+  
+  switch (businessType) {
+    case 'shopping':
+    case 'muasam':
+      businessData = {
+        users: users,
+        chiphi: enrichWithUserData(filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHIPHI)), userMap),
+        chiphiChitiet: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHIPHI_CHITIET)),
+        boLocChiPhi: getDataFromSheet(CONFIG.SHEETS.BO_LOC_CHI_PHI)
+      };
+      break;
+      
+    case 'inventory':
+    case 'nhapxuatton':
+      businessData = {
+        users: users,
+        phieuNhapXuat: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.PHIEU_NHAP_XUAT)),
+        pnxChiTiet: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.PNX_CHI_TIET)),
+        vatLieu: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.VAT_LIEU)),
+        dsKho: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.DS_KHO)),
+        tonKho: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.TON_KHO)),
+        phieuChuyenKho: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.PHIEU_CHUYEN_KHO)),
+        chuyenKhoChiTiet: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHUYEN_KHO_CHI_TIET)),
+        doiTac: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.DOI_TAC))
+      };
+      break;
+      
+    case 'hr':
+    case 'nhansu':
+      businessData = {
+        users: users,
+        chamCong: enrichWithUserData(filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHAM_CONG)), userMap),
+        lichSuLuong: enrichWithUserData(filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.LICH_SU_LUONG)), userMap),
+        giaoDichLuong: enrichWithUserData(filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.GIAO_DICH_LUONG)), userMap),
+        bangLuongThang: enrichWithUserData(filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.BANG_LUONG_THANG)), userMap),
+        luongPhuCap: enrichWithUserData(filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.LUONG_PHU_CAP)), userMap),
+        banGiaoCongCu: enrichWithUserData(filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.BAN_GIAO_CONG_CU)), userMap),
+        bangDieuKhienTinhLuong: getDataFromSheet(CONFIG.SHEETS.BANG_DIEU_KHIEN_TINH_LUONG)
+      };
+      break;
+      
+    default:
+      businessData = { error: 'Nghiệp vụ không hợp lệ. Sử dụng: shopping, inventory, hr' };
+  }
+  
+  return ContentService
+    .createTextOutput(JSON.stringify(businessData))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Chỉ lấy dữ liệu User
+ */
+function getUserDataOnly() {
+  const users = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.USER));
+  const dropData = getDataFromSheet(CONFIG.SHEETS.DROP);
+  
+  return ContentService
+    .createTextOutput(JSON.stringify({
+      users: users,
+      dropdownData: dropData
+    }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// === HELPER FUNCTIONS ===
+
+/**
+ * Tạo map User để join dữ liệu
+ */
+function createUserMap(users) {
+  // 🔧 FIX: Kiểm tra users có tồn tại và là array không
+  if (!users || !Array.isArray(users)) {
+    console.warn('createUserMap: users is not an array:', users);
+    return {};
+  }
+  
+  const userMap = {};
+  users.forEach(user => {
+    // Kiểm tra user có ID không
+    if (user && user.ID) {
+      userMap[user.ID] = user;
+    }
+  });
+  return userMap;
+}
+
+/**
+ * Làm giàu dữ liệu với thông tin User
+ */
+function enrichWithUserData(data, userMap) {
+  // 🔧 FIX: Kiểm tra data và userMap có tồn tại không
+  if (!data || !Array.isArray(data)) {
+    console.warn('enrichWithUserData: data is not an array:', data);
+    return [];
+  }
+  
+  if (!userMap || typeof userMap !== 'object') {
+    console.warn('enrichWithUserData: userMap is not an object:', userMap);
+    return data; // Trả về data gốc nếu không có userMap
+  }
+  
+  return data.map(record => {
+    // Kiểm tra record có tồn tại không
+    if (!record || typeof record !== 'object') {
+      console.warn('enrichWithUserData: invalid record:', record);
+      return record;
+    }
+    
+    // Tìm ID nhân viên trong record
+    const userIdField = record.ID_NhanVien || record['ID nhân viên'] || record.NguoiLap || record.ChonNhanVien;
+    
+    if (userIdField && userMap[userIdField]) {
+      const user = userMap[userIdField];
+      record._userData = {
+        hoTen: user['Họ và tên'] || '',
+        email: user.Email || '',
+        boPhan: user['Bộ phận'] || '',
+        chucVu: user['Chức vụ'] || ''
+      };
+    }
+    
+    return record;
+  });
+}
+
+/**
+ * Lấy thống kê tổng quan
+ */
+function getStatistics() {
+  try {
+    const users = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.USER));
+    const chamCong = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHAM_CONG));
+    const giaoDichLuong = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.GIAO_DICH_LUONG));
+    const tonKho = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.TON_KHO));
+    const chiphi = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHIPHI));
+    
+    // Thống kê nhân sự
+    const hrStats = {
+      totalEmployees: users.length,
+      activeEmployees: users.filter(u => u['Trạng thái'] !== 'Nghỉ việc').length,
+      totalWorkHours: chamCong.reduce((sum, record) => sum + (parseFloat(record.SoGioCong) || 0), 0),
+      totalOvertimeHours: chamCong.reduce((sum, record) => sum + (parseFloat(record.SoGioTangCa) || 0), 0),
+      totalSalaryPaid: giaoDichLuong
+        .filter(g => g.LoaiGiaoDich === 'Chi lương')
+        .reduce((sum, record) => sum + (parseFloat(record.SoTien) || 0), 0)
+    };
+    
+    // Thống kê kho
+    const inventoryStats = {
+      totalItems: tonKho.length,
+      totalValue: tonKho.reduce((sum, record) => sum + (parseFloat(record.SoLuongTon) || 0), 0)
+    };
+    
+    // Thống kê chi phí
+    const costStats = {
+      totalExpenses: chiphi.reduce((sum, record) => sum + (parseFloat(record.TongSoTien) || 0), 0),
+      totalTransactions: chiphi.length
+    };
+    
+    const stats = {
+      timestamp: new Date().toISOString(),
+      hr: hrStats,
+      inventory: inventoryStats,
+      costs: costStats,
+      summary: {
+        totalUsers: users.length,
+        totalRecords: chamCong.length + giaoDichLuong.length + tonKho.length + chiphi.length
+      }
+    };
+    
+    return ContentService
+      .createTextOutput(JSON.stringify(stats))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        error: 'Lỗi khi tính toán thống kê: ' + error.message
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
+ * Lấy dữ liệu có lọc
+ */
+function getFilteredData(params) {
+  try {
+    const business = params.business || 'hr';
+    const fromDate = params.fromDate;
+    const toDate = params.toDate;
+    const userId = params.userId;
+    
+    // Lấy dữ liệu base
+    let data = {};
+    switch (business) {
+      case 'hr':
+        data = {
+          chamCong: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHAM_CONG)),
+          giaoDichLuong: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.GIAO_DICH_LUONG))
+        };
+        break;
+      case 'inventory':
+        data = {
+          phieuNhapXuat: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.PHIEU_NHAP_XUAT)),
+          pnxChiTiet: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.PNX_CHI_TIET))
+        };
+        break;
+      case 'shopping':
+        data = {
+          chiphi: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHIPHI))
+        };
+        break;
+    }
+    
+    // Áp dụng filter
+    if (fromDate || toDate || userId) {
+      Object.keys(data).forEach(key => {
+        data[key] = data[key].filter(record => {
+          let include = true;
+          
+          // Filter theo date
+          if (fromDate || toDate) {
+            const recordDate = record.Ngày || record.NgayGiaoDich || record.NgayChiPhi;
+            if (recordDate) {
+              const date = new Date(recordDate);
+              if (fromDate && date < new Date(fromDate)) include = false;
+              if (toDate && date > new Date(toDate)) include = false;
+            }
+          }
+          
+          // Filter theo user
+          if (userId) {
+            const recordUserId = record.ID_NhanVien || record.NguoiLap;
+            if (recordUserId !== userId) include = false;
+          }
+          
+          return include;
+        });
+      });
+    }
+    
+    return ContentService
+      .createTextOutput(JSON.stringify(data))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        error: 'Lỗi khi lọc dữ liệu: ' + error.message
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// === TEST FUNCTIONS ===
+
+/**
+ * Test function để kiểm tra dữ liệu
+ */
+function testDataRetrieval() {
+  console.log('=== KIỂM TRA DỮ LIỆU ===');
+  
+  try {
+    // Test kết nối spreadsheet
+    const ss = getSpreadsheet();
+    console.log('Spreadsheet ID:', ss.getId());
+    console.log('Spreadsheet Name:', ss.getName());
+    
+    // Test từng sheet quan trọng
+    const testSheets = [
+      CONFIG.SHEETS.USER,
+      CONFIG.SHEETS.CHAM_CONG,
+      CONFIG.SHEETS.GIAO_DICH_LUONG,
+      CONFIG.SHEETS.CHIPHI
+    ];
+    
+    testSheets.forEach(sheetName => {
+      try {
+        if (sheetExists(sheetName)) {
+          const data = getDataFromSheet(sheetName, 3); // Chỉ lấy 3 dòng đầu
+          console.log(`✅ ${sheetName}: ${data.length} bản ghi`);
+          if (data.length > 0) {
+            console.log(`   Cột: ${Object.keys(data[0]).slice(0, 5).join(', ')}...`);
+          }
+        } else {
+          console.log(`❌ ${sheetName}: Sheet không tồn tại`);
+        }
+      } catch (e) {
+        console.log(`⚠️ ${sheetName}: Lỗi - ${e.message}`);
+      }
+    });
+    
+    // Test API endpoints
+    console.log('\n=== TEST API ENDPOINTS ===');
+    
+    // Test doGet without parameters
+    console.log('Testing doGet()...');
+    const testResult = doGet(null);
+    console.log('doGet() test: OK');
+    
+    // Test doGet with empty object
+    const testResult2 = doGet({});
+    console.log('doGet({}) test: OK');
+    
+    // Test doGet with parameter
+    const testResult3 = doGet({ parameter: { action: 'getStats' } });
+    console.log('doGet with parameters test: OK');
+    
+    return 'Test completed successfully';
+    
+  } catch (error) {
+    console.error('Lỗi trong test:', error);
+    console.error('Error stack:', error.stack);
+    return 'Test failed: ' + error.message;
+  }
+}
+
+/**
+ * Test đơn giản chỉ lấy dữ liệu User
+ */
+function testUserDataOnly() {
+  try {
+    console.log('Testing User data...');
+    const userData = getDataFromSheet(CONFIG.SHEETS.USER, 5);
+    console.log('User data count:', userData.length);
+    
+    if (userData.length > 0) {
+      console.log('First user:', userData[0]);
+      console.log('User columns:', Object.keys(userData[0]));
+    }
+    
+    return userData;
+  } catch (error) {
+    console.error('Error in testUserDataOnly:', error);
+    return null;
+  }
+}
+
+/**
+ * Test API endpoint trực tiếp
+ */
+function testDirectAPI() {
+  try {
+    console.log('=== TEST DIRECT API ===');
+    
+    // Test getAllData
+    const result1 = getAllData();
+    console.log('getAllData: Success');
+    
+    // Test getUserDataOnly
+    const result2 = getUserDataOnly();
+    console.log('getUserDataOnly: Success');
+    
+    // Test getStatistics
+    const result3 = getStatistics();
+    console.log('getStatistics: Success');
+    
+    return 'All API tests passed';
+    
+  } catch (error) {
+    console.error('API test failed:', error);
+    return 'API test failed: ' + error.message;
+  }
+}
+
+/**
+ * Tạo sample HTML để test
+ */
+function createSampleHTML() {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Dashboard API</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Test Dashboard API</h1>
+    <button onclick="testAPI()">Test API</button>
+    <div id="result"></div>
+    
+    <script>
+    const API_URL = 'YOUR_WEB_APP_URL_HERE';
+    
+    function testAPI() {
+        $('#result').html('Đang tải...');
+        
+        fetch(API_URL + '?action=getStats')
+        .then(response => response.json())
+        .then(data => {
+            $('#result').html('<pre>' + JSON.stringify(data, null, 2) + '</pre>');
+        })
+        .catch(error => {
+            $('#result').html('Lỗi: ' + error.message);
+        });
+    }
+    </script>
+</body>
+</html>
+  `;
+  
+  return html;
+}
+
+Trên Đây là đoạn code.gs của tôi.
+và API URL: AKfycbwmW-plingk-e11esKWeWkpSwmUpkGWsNrgviTm5qTxawcj7nPNk4rCLS--S09LnHzgvg
+
+Tôi yêu cầu bạn giúp tôi.
+- Hoàn chỉnh lại các đoạn code gs và HTM để hiển thị HTML. Đề nghị mẫu HTML hiện đại với nhiều chức năng.
+- Tôi muốn host đoạn html này trên Google script (Vậy cần sửa code.gs)

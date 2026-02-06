@@ -1,0 +1,182 @@
+/**
+ * Google Apps Script API cho Dashboard Quản Lý Tổng Hợp
+ * Author: Assistant
+ * Date: 2025
+ */
+
+// === MAIN API ENDPOINT ===
+function doGet(e) {
+  try {
+    const parameter = (e && e.parameter) ? e.parameter : {};
+    const action = parameter.action;
+
+    if (!action) {
+      return HtmlService.createTemplateFromFile('index')
+        .evaluate()
+        .setTitle('Dashboard Quản Lý Tổng Hợp')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+
+    console.log('API call received with action:', action);
+    switch (action) {
+      case 'getBusinessData': return getBusinessData(parameter.business);
+      case 'getStats': return getStatistics();
+      default:
+        return ContentService
+          .createTextOutput(JSON.stringify({ error: 'Action không hợp lệ: ' + action }))
+          .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+  } catch (error) {
+    console.error('Lỗi trong doGet:', error, error.stack);
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        error: 'Có lỗi xảy ra: ' + error.message,
+        details: error.stack,
+        timestamp: new Date().toISOString()
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// === CONFIGURATION ===
+const CONFIG = {
+  SHEETS: {
+    USER: 'User',
+    CHIPHI: 'Chiphi',
+    CHIPHI_CHITIET: 'Chiphichitiet',
+    DS_KHO: 'DS_kho',
+    CHAM_CONG: 'Chamcong',
+    GIAO_DICH_LUONG: 'GiaoDichLuong'
+    // Thêm các sheet khác nếu cần cho các nghiệp vụ khác
+  }
+};
+
+// === UTILITY FUNCTIONS ===
+function getSpreadsheet() { return SpreadsheetApp.getActiveSpreadsheet(); }
+function sheetExists(sheetName) { return getSpreadsheet().getSheetByName(sheetName) !== null; }
+
+function rangeToObjects(range) {
+  if (!range || range.length < 2) return [];
+  const headers = range[0].map(h => h.toString().trim());
+  return range.slice(1).map((row, index) => {
+    const obj = {};
+    headers.forEach((header, colIndex) => {
+      let value = row[colIndex];
+      if (value instanceof Date) {
+        value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+      }
+      obj[header] = value;
+    });
+    return obj;
+  });
+}
+
+function getDataFromSheet(sheetName) {
+  try {
+    if (!sheetExists(sheetName)) return [];
+    const sheet = getSpreadsheet().getSheetByName(sheetName);
+    const range = sheet.getDataRange().getValues();
+    return rangeToObjects(range);
+  } catch (error) {
+    console.error(`Lỗi khi lấy dữ liệu từ sheet "${sheetName}":`, error);
+    return [];
+  }
+}
+
+function filterActiveRecords(data) {
+  if (!data || !Array.isArray(data)) return [];
+  return data.filter(record => record && (record.Delete !== true && record.Delete !== 'true' && record.Delete !== 'TRUE'));
+}
+
+// === DATA RETRIEVAL FUNCTIONS ===
+
+function getBusinessData(businessType) {
+  let businessData = {};
+  switch (businessType) {
+    case 'hr':
+      businessData = {
+        users: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.USER)),
+        chamCong: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHAM_CONG)),
+        giaoDichLuong: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.GIAO_DICH_LUONG)),
+        dsKho: filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.DS_KHO))
+      };
+      break;
+    // Thêm các nghiệp vụ khác nếu cần
+  }
+  return ContentService.createTextOutput(JSON.stringify(businessData)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function getStatistics() {
+  try {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const todayStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+    const users = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.USER));
+    const chamCong = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHAM_CONG));
+    const chiphiChitiet = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHIPHI_CHITIET));
+    const dsKho = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.DS_KHO));
+    const chiphi = filterActiveRecords(getDataFromSheet(CONFIG.SHEETS.CHIPHI));
+
+    const khoMap = dsKho.reduce((map, kho) => {
+        map[kho['ID kho']] = kho['Tên kho'];
+        return map;
+    }, {});
+    
+    const totalExpenses = chiphi.reduce((sum, record) => sum + (parseFloat(record.TongSoTien) || 0), 0);
+    
+    const activeEmployees = users.filter(u => u['Trạng thái'] === 'Đang làm việc').length;
+    
+    const workedThisMonth = new Set(chamCong.filter(rec => {
+        const recDate = new Date(rec.Ngày);
+        return recDate.getMonth() + 1 === currentMonth && recDate.getFullYear() === currentYear;
+    }).map(rec => rec.ID_NhanVien)).size;
+
+    const attendedToday = new Set(chamCong.filter(rec => rec.Ngày && rec.Ngày.toString().startsWith(todayStr)).map(rec => rec.ID_NhanVien)).size;
+
+    const expensesByWarehouse = chiphiChitiet.reduce((acc, item) => {
+      const khoName = khoMap[item.Ten_Kho] || item.Ten_Kho || 'Không xác định';
+      acc[khoName] = (acc[khoName] || 0) + (parseFloat(item.SoTien) || 0);
+      return acc;
+    }, {});
+
+    const personnelByWarehouseThisMonth = chamCong.filter(rec => {
+        const recDate = new Date(rec.Ngày);
+        return recDate.getMonth() + 1 === currentMonth && recDate.getFullYear() === currentYear;
+    }).reduce((acc, rec) => {
+        const khoName = khoMap[rec.Kholamviec] || rec.Kholamviec || 'Không xác định';
+        if (!acc[khoName]) acc[khoName] = new Set();
+        acc[khoName].add(rec.ID_NhanVien);
+        return acc;
+    }, {});
+
+    const personnelByWarehouseCount = {};
+    for (const kho in personnelByWarehouseThisMonth) {
+        personnelByWarehouseCount[kho] = personnelByWarehouseThisMonth[kho].size;
+    }
+
+    const stats = {
+      timestamp: new Date().toISOString(),
+      hr: {
+        totalEmployees: users.length,
+        activeEmployees: activeEmployees,
+        inactiveThisMonth: activeEmployees - workedThisMonth,
+        attendedToday: attendedToday,
+        notAttendedToday: activeEmployees - attendedToday,
+      },
+      costs: {
+        totalExpenses: totalExpenses,
+        expensesByWarehouse: expensesByWarehouse
+      },
+      warehouse: {
+        personnelByWarehouse: personnelByWarehouseCount
+      }
+    };
+    
+    return ContentService.createTextOutput(JSON.stringify(stats)).setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ error: 'Lỗi khi tính toán thống kê: ' + error.message })).setMimeType(ContentService.MimeType.JSON);
+  }
+}

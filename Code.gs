@@ -1,0 +1,112 @@
+/**
+ * Google Apps Script API cho Dashboard Quản Lý Tổng Hợp CDX
+ * 3 Nghiệp vụ chính: Mua sắm, Nhập xuất tồn, Quản lý nhân sự
+ */
+
+function doGet(e) {
+  return HtmlService.createTemplateFromFile('index')
+    .evaluate()
+    .setTitle('Hệ Thống Quản Lý CDX')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+// === CONFIGURATION ===
+const CONFIG = {
+  SHEETS: {
+    USER: 'User',
+    CHIPHI: 'Chiphi',
+    CHIPHI_CHITIET: 'Chiphichitiet',
+    PHIEU_NHAP_XUAT: 'PhieuNhapXuat',
+    PNX_CHI_TIET: 'PNXChiTiet',
+    VAT_LIEU: 'VatLieu',
+    DS_KHO: 'DS_kho',
+    TON_KHO: 'Tonkho',
+    PHIEU_CHUYEN_KHO: 'Phieuchuyenkho',
+    CHUYEN_KHO_CHI_TIET: 'Chuyenkhochitiet',
+    DOI_TAC: 'Doitac',
+    CHAM_CONG: 'Chamcong',
+    LICH_SU_LUONG: 'LichSuLuong',
+    GIAO_DICH_LUONG: 'GiaoDichLuong',
+    BANG_LUONG_THANG: 'BangLuongThang'
+  }
+};
+
+/**
+ * Lấy dữ liệu ban đầu cho ứng dụng
+ */
+function getInitialData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const results = {};
+    
+    for (const [key, name] of Object.entries(CONFIG.SHEETS)) {
+      const sheet = ss.getSheetByName(name);
+      if (sheet) {
+        const data = sheet.getDataRange().getValues();
+        if (data.length > 1) {
+          results[name] = rangeToObjects(data);
+        } else {
+          results[name] = [];
+        }
+      }
+    }
+    
+    return results;
+  } catch (error) {
+    return { status: 'error', message: error.message };
+  }
+}
+
+function rangeToObjects(range) {
+  const headers = range[0];
+  const data = range.slice(1);
+  return data.map(row => {
+    const obj = {};
+    headers.forEach((header, i) => {
+      let val = row[i];
+      if (val instanceof Date) {
+        val = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss'Z'");
+      }
+      obj[header] = val;
+    });
+    return obj;
+  });
+}
+
+function loginUser(username, password) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.SHEETS.USER);
+  const data = rangeToObjects(sheet.getDataRange().getValues());
+  
+  const user = data.find(u => u['ID'] == username && u['App_pass'] == password);
+  if (user) {
+    return {
+      user: {
+        id: user['ID'],
+        name: user['Họ và tên'],
+        role: user['Chức vụ'] || 'Nhân viên'
+      }
+    };
+  }
+  return { error: 'Sai tài khoản hoặc mật khẩu' };
+}
+
+function saveData(sheetName, data) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(sheetName);
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    
+    const newRow = headers.map(h => data[h] || '');
+    sheet.appendRow(newRow);
+    
+    return { status: 'success' };
+  } catch (error) {
+    return { status: 'error', message: error.message };
+  }
+}

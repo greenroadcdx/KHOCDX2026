@@ -1,0 +1,154 @@
+ID vật liệu,Tên vật liệu,Nhóm vật liệu
+VT001,"Tôn lót dầm ép, xe cẩu","Tôn, sắt, thép, sắt hình"
+VT002,"Tôn lót dầm ép, xe cẩu, lot đường","Tôn, sắt, thép, sắt hình"
+VT003,Tôn lót đường (tôn tàu),"Tôn, sắt, thép, sắt hình"
+VT004,Tôn lot đường (tôn mỏng),"Tôn, sắt, thép, sắt hình"
+VT005,Bộ dàm dàn máy ép thuỷ lực 300T,Máy móc xây dựng
+VT006,Cục tải bê tông,"Tôn, sắt, thép, sắt hình"
+VT007,Thùng dồ nghề bằng sắt,"Tôn, sắt, thép, sắt hình"
+VT008,Máy phát điện,Máy móc xây dựng
+VT009,Dây điện …pha cho máy phát,Máy móc xây dựng
+VT010,Xe cẩu 30 tấn,Thiết bị cơ giới lớn
+VT011,Cáp cẩu,Phụ tùng/linh kiện
+VT012,Cáp nèo cọc,Vật tư bê tông & cọc
+VT013,Máy hàn điện tử,Máy móc xây dựng
+VT014,Máy hàn cơ,Máy móc xây dựng
+VT015,Bộ dây hàn….mét,Dây điện & phụ kiện điện
+VT016,Kìm hàn,Dụng cụ & thiết bị cầm tay
+VT017,Thanh sắt chốt dầm 0.5 mét,"Tôn, sắt, thép, sắt hình"
+VT018,Xà beng,Dụng cụ & thiết bị cầm tay
+VT019,Ủng bảo hộ,Đồ bảo hộ & phụ trợ
+VT020,Bảng viết mika,Đồ bảo hộ & phụ trợ
+VT021,Thước cuộn,Dụng cụ & thiết bị cầm tay
+VT022,Thước thuỷ,Dụng cụ & thiết bị cầm tay
+VT023,Ma ní,Khác
+VT024,Bộ chìa khoá từ 10 đến 24,Dụng cụ & thiết bị cầm tay
+VT025,Mỏ lết răng,Dụng cụ & thiết bị cầm tay
+VT026,Mỏ lết thường,Dụng cụ & thiết bị cầm tay
+VT027,Kìm cách điện,Dụng cụ & thiết bị cầm tay
+VT028,Tuốc vít 4 cạnh,Dụng cụ & thiết bị cầm tay
+VT029,Búa đinh,Dụng cụ & thiết bị cầm tay
+VT030,Bản mã nối cọc,"Tôn, sắt, thép, sắt hình"
+VT031,Sắt V nối cọc,"Tôn, sắt, thép, sắt hình"
+VT032,Que hàn 4 mm,Thiết bị hàn/cắt
+VT033,Tôn lót đường (dày),"Tôn, sắt, thép, sắt hình"
+VT034,Tôn lót đường (mỏng,"Tôn, sắt, thép, sắt hình"
+VT035,Tôn lót đường mỏng (vỉ xe cuốc),"Tôn, sắt, thép, sắt hình"
+VT046,Máy hàn cơ (trong thùng đồ nghề),Máy móc xây dựng
+VT053,Đe ép cọc,Vật tư bê tông & cọc
+VT054,Xích + mani,Phụ tùng/linh kiện
+VT056,Bộ chìa khoá từ 10 đến 24+thùng,Dụng cụ & thiết bị cầm tay
+VT064,Bóng đèn thắp sáng vt11,Thiết bị điện & chiếu sáng
+VT065,Cọc mũi 11.2,Vật tư bê tông & cọc
+VT066,Cọc thân 2 đầu,Vật tư bê tông & cọc
+VT067,Cọc thân 1 đầu,Vật tư bê tông & cọc
+VT068,Bộ khuôn đúc bê tông (11 cọc/bộ),"Tôn, sắt, thép, sắt hình"
+VT069,Sắt khuôn dư kt 0.15m x 6 mét,"Tôn, sắt, thép, sắt hình"
+VT070,ống tưới nước,Vật tư thi công phụ trợ
+VT071,Dây điện 1x2,Dây điện & phụ kiện điện
+VT073,Đèn led thắp sáng,Thiết bị điện & chiếu sáng
+VT074,Bộ xạc bình ác quy,Đồ bảo hộ & phụ trợ
+VT075,Cưa xăng,Máy móc xây dựng
+VT076,Máy đầm dùi bê tông + dùi,"Tôn, sắt, thép, sắt hình"
+VT077,Gàu xe cuốc,Thiết bị cơ giới lớn
+VT078,Xe cuốc,Thiết bị cơ giới lớn
+VT079,Lưới sắt B40 (nhơn trạch về),"Tôn, sắt, thép, sắt hình"
+VT080,Thùng nhưạ đựng nước 200 l,Đồ bảo hộ & phụ trợ
+VT081,"Bình oxi, ga + vòi mỏ",Đồ bảo hộ & phụ trợ
+VT082,Cuộn dây điện nguồn 1pha,Dây điện & phụ kiện điện
+VT083,"Tấm sắt bảo vệ máy phát 1x1m, 2 li","Tôn, sắt, thép, sắt hình"
+VT084,Máng đổ bê tông,"Tôn, sắt, thép, sắt hình"
+VT085,Cánh cửa xe cuốc,Thiết bị cơ giới lớn
+VT086,Cột camera,Camera & thiết bị điện tử
+VT087,Camera quay quét+pin,Camera & thiết bị điện tử
+VT088,Camera nhỏ,Camera & thiết bị điện tử
+VT089,Ống mũi 5 đoạn tổng khoang 15 mét,Máy móc xây dựng
+VT090,Sắt vụn trong công te nơ,"Tôn, sắt, thép, sắt hình"
+VT091,"Nhớt thải, thuỷ lực thái",Đồ bảo hộ & phụ trợ
+VT092,Công te nơ,Vật tư lưu trữ & vận chuyển
+VT094,Sắt phi 22,"Tôn, sắt, thép, sắt hình"
+VT095,Sắt tấm cắt phôi ra,"Tôn, sắt, thép, sắt hình"
+VT096,Đầm dùi bê tông máy xăng,"Tôn, sắt, thép, sắt hình"
+VT097,Khoan đục bê tông,"Tôn, sắt, thép, sắt hình"
+VT098,Rùa cắt gió đá,Vật tư khác
+VT099,Chân máy đo chữ A,Máy móc xây dựng
+VT100,Cục chống rơi an toàn,Đồ bảo hộ & phụ trợ
+VT101,Cưa xăng cũ,Máy móc xây dựng
+VT102,Bộ ống mỏ vòi gió đá,Phụ tùng/linh kiện
+VT103,Dây dùi máy bê tông,"Tôn, sắt, thép, sắt hình"
+VT104,Bánh pone cũ của cuốc cẩu,Phụ tùng/linh kiện
+VT105,Kẽm cuộn 50kg,"Tôn, sắt, thép, sắt hình"
+VT106,Dây máy hàn Mic,Máy móc xây dựng
+VT107,Bơm chìm,Máy móc xây dựng
+VT108,Mũi máy đục bê tông,"Tôn, sắt, thép, sắt hình"
+VT109,Bánh xe rùa cũ,Phụ tùng/linh kiện
+VT110,Bánh xe rùa mới,Phụ tùng/linh kiện
+VT111,Nhớt máy thùng 18l,Máy móc xây dựng
+VT112,"Palang xích to, nhỏ",Máy móc xây dựng
+VT113,Máy cắt tay,Máy móc xây dựng
+VT114,"Máy hàn MIC, đủ dây",Máy móc xây dựng
+VT115,Kéo cộng lực cắt sắt,"Tôn, sắt, thép, sắt hình"
+VT116,Máy hàn điện từ,Máy móc xây dựng
+VT118,Máy hàn cơ hỏng,Máy móc xây dựng
+VT119,Bình Gax,Đồ bảo hộ & phụ trợ
+VT120,Bình gió,Đồ bảo hộ & phụ trợ
+VT121,Đá máy cắt bàn 4 tấc,Máy móc xây dựng
+VT122,Kìm hàn mới,Dụng cụ & thiết bị cầm tay
+VT123,Hộp điện 20x35 nhựa,Thiết bị điện & chiếu sáng
+VT124,hộp điện kẽm 45x60cm,"Tôn, sắt, thép, sắt hình"
+VT125,Dùi bê tông,"Tôn, sắt, thép, sắt hình"
+VT126,Dây điện nguồn 1 pha,Dây điện & phụ kiện điện
+VT127,Dây điện 1 pha 1.5 nâu,Dây điện & phụ kiện điện
+VT128,"Khung sắt V10, của khung thuỷ lực","Tôn, sắt, thép, sắt hình"
+VT130,Cục tải cap 1 cẩu,Vật tư bê tông & cọc
+VT131,Tấm thép đe,"Tôn, sắt, thép, sắt hình"
+VT132,Dây hàn mới,Dây điện & phụ kiện điện
+VT133,"Lá xích cuốc, cẩu","Tôn, sắt, thép, sắt hình"
+VT134,Camera quay,Camera & thiết bị điện tử
+VT135,Máy vỏ lãi + Xác xi chân vit,Máy móc xây dựng
+VT136,Bình ác quy 50 cũ,Đồ bảo hộ & phụ trợ
+VT137,Tấm thép kê đầu cọc,"Tôn, sắt, thép, sắt hình"
+VT138,Thanh sắt v7,"Tôn, sắt, thép, sắt hình"
+VT139,Thanh sắt tròn phi 25,"Tôn, sắt, thép, sắt hình"
+VT140,"Mỏ, dây hàn",Dây điện & phụ kiện điện
+VT141,Máy bẻ sắt cây (móc cẩu),"Tôn, sắt, thép, sắt hình"
+VT142,Máy chặt sắt cây,"Tôn, sắt, thép, sắt hình"
+VT143,Máy cắt bàn,Máy móc xây dựng
+VT144,Vỏ thùng phuy 200l,Đồ bảo hộ & phụ trợ
+VT146,Tôn lót đường dày 1.5x6,"Tôn, sắt, thép, sắt hình"
+VT147,Xe cẩu KH 125,Thiết bị cơ giới lớn
+VT148,Máy chặt sắt tấm,"Tôn, sắt, thép, sắt hình"
+VT149,Máy chấn sắt tấm,"Tôn, sắt, thép, sắt hình"
+VT150,Sà lan nhỏ tải 70 tấn,Thiết bị cơ giới lớn
+VT151,"Máy phát xanh, đỏ, trắng",Máy móc xây dựng
+VT152,Máy phát xanh 3 pha,Máy móc xây dựng
+VT153,Máy chạy đai,Máy móc xây dựng
+VT154,Khuôn đúc bê tông 11 cọc/bộ,"Tôn, sắt, thép, sắt hình"
+VT156,Xe rùa,Vật tư lưu trữ & vận chuyển
+VT157,Xe rua kéo tay,Dụng cụ & thiết bị cầm tay
+VT160,Sắt vụ ..,"Tôn, sắt, thép, sắt hình"
+VT161,Máy biến thế máy chặt,Máy móc xây dựng
+VT162,Sắt tấm phôi bản mã,"Tôn, sắt, thép, sắt hình"
+VT163,Sắt phôi bản mà,"Tôn, sắt, thép, sắt hình"
+VT165,Sắt phôi bản mã,"Tôn, sắt, thép, sắt hình"
+VT166,Hộp điện kỹ thuật,Thiết bị điện & chiếu sáng
+VT167,Cọc camera,Camera & thiết bị điện tử
+VT169,Bánh phone cuốc,Phụ tùng/linh kiện
+VT170,Sắt tấm khuôn dư,"Tôn, sắt, thép, sắt hình"
+VT171,Ngựa để bô lồng,"Dụng cụ đo, kiểm tra"
+VT172,Chân 3 chang máy bẻ đai,Máy móc xây dựng
+VT173,Vỏ can xăng dầu,Đồ bảo hộ & phụ trợ
+VT174,Khuôn để đổ mũi,Vật tư bê tông & cọc
+VT175,Vỏ lãi 8.1 mét,Đồ bảo hộ & phụ trợ
+VT176,Thùng đồ nghễ cũ,Đồ bảo hộ & phụ trợ
+VT177,Đốt cần xe cẩu,"Tôn, sắt, thép, sắt hình"
+VT178,Cây nối vuông ép âm,Phụ tùng/linh kiện
+VT179,Sắt cây phi 25,"Tôn, sắt, thép, sắt hình"
+VT180,"Sắt cây phi 21 nối 11,7","Tôn, sắt, thép, sắt hình"
+VT181,Sắt cây phi 21 nôis 9 m,"Tôn, sắt, thép, sắt hình"
+VT182,Búa đục thuỷ lực,Dụng cụ & thiết bị cầm tay
+VT183,Thép 8 cuônj đã dùng,"Tôn, sắt, thép, sắt hình"
+VT184,Thép 8 đã ra đai,"Tôn, sắt, thép, sắt hình"
+VT185,Cọc bê tông thân 2 hộp,"Tôn, sắt, thép, sắt hình"
+VT186,Cọc bê tông thân 1 hộp,"Tôn, sắt, thép, sắt hình"
+VT187,Hàng rao công trình,Khác

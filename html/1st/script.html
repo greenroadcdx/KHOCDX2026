@@ -1,0 +1,306 @@
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // STATE HOLDERS
+    let fullDataset = { User: [], ChamCong: [], GiaoDichLuong: [], LichSuLuong: [] };
+    let displayDataset = { User: [], ChamCong: [], GiaoDichLuong: [], LichSuLuong: [] };
+    let userMap = new Map();
+
+    // ELEMENT SELECTORS
+    const totalEmployeesEl = document.getElementById('total-employees');
+    const totalPayrollEl = document.getElementById('total-payroll');
+    const netSalaryEl = document.getElementById('net-salary');
+    const avgSalaryEl = document.getElementById('avg-salary');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const dataContainer = document.getElementById('data-container');
+    const monthFilterEl = document.getElementById('month-filter');
+    const yearFilterEl = document.getElementById('year-filter');
+    const salaryTableContainer = document.getElementById('salary-table-container');
+    const salaryTableHeader = document.getElementById('salary-table-header');
+    const salaryTableBody = document.getElementById('salary-table-body');
+    const salaryMonthTitle = document.getElementById('salary-month-title');
+    const exportExcelBtn = document.getElementById('export-excel');
+    const exportPdfBtn = document.getElementById('export-pdf');
+    const addEmployeeBtn = document.getElementById('add-employee');
+    const refreshEmployeeBtn = document.getElementById('refresh-employee');
+    const employeeTableBody = document.getElementById('employee-table-body');
+    const navLinks = document.querySelectorAll('.nav-link');
+    const contentViews = document.querySelectorAll('.content-view');
+
+    // 1. LẤY DỮ LIỆU
+    const fetchData = () => {
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(onDataReceived)
+            .withFailureHandler(onDataError)
+            .getServerData();
+    };
+
+    const onDataReceived = (dataset) => {
+        if (dataset.error) { onDataError({ message: dataset.error }); return; }
+        fullDataset = dataset;
+        userMap = new Map(fullDataset.User.map(u => [u.ID.toString(), u]));
+        populateFilterOptions();
+        applyFilters();
+        renderEmployeeTable();
+        showLoading(false);
+    };
+
+    const onDataError = (error) => {
+        console.error("Lỗi khi lấy dữ liệu:", error);
+        alert("Không thể tải dữ liệu.\nLỗi: " + error.message);
+        showLoading(false);
+    };
+
+    // 2. TẠO BỘ LỌC
+    const populateFilterOptions = () => {
+        const years = [2025, 2024, 2023];
+        yearFilterEl.innerHTML = '';
+        years.forEach(year => {
+            yearFilterEl.innerHTML += `<option value="${year}">${year}</option>`;
+        });
+        yearFilterEl.value = new Date().getFullYear();
+
+        monthFilterEl.innerHTML = '<option value="all">Tất cả tháng</option>';
+        for (let i = 1; i <= 12; i++) {
+            monthFilterEl.innerHTML += `<option value="${i}">Tháng ${i}</option>`;
+        }
+        monthFilterEl.value = new Date().getMonth() + 1;
+    };
+
+    // 3. LỌC DỮ LIỆU
+    const applyFilters = () => {
+        const selectedYear = yearFilterEl.value;
+        const selectedMonth = monthFilterEl.value;
+        
+        const filteredChamCong = fullDataset.ChamCong.filter(record => {
+            if (!record.Ngay) return false;
+            const recordDate = new Date(record.Ngay);
+            const yearMatch = (selectedYear === 'all' || recordDate.getFullYear() == selectedYear);
+            const monthMatch = (selectedMonth === 'all' || recordDate.getMonth() + 1 == selectedMonth);
+            return yearMatch && monthMatch;
+        });
+        
+        const filteredGiaoDich = fullDataset.GiaoDichLuong.filter(tx => {
+            if (!tx.NgayGiaoDich) return false;
+            const txDate = new Date(tx.NgayGiaoDich);
+            const yearMatch = (selectedYear === 'all' || txDate.getFullYear() == selectedYear);
+            const monthMatch = (selectedMonth === 'all' || txDate.getMonth() + 1 == selectedMonth);
+            return yearMatch && monthMatch;
+        });
+        
+        const activeUserIds = new Set(filteredChamCong.map(c => c.ID_NhanVien?.toString()));
+        const filteredUsers = fullDataset.User.filter(user => activeUserIds.has(user.ID?.toString()));
+        
+        displayDataset = { 
+            User: filteredUsers, 
+            ChamCong: filteredChamCong, 
+            GiaoDichLuong: filteredGiaoDich,
+            LichSuLuong: fullDataset.LichSuLuong
+        };
+        
+        renderDashboard(displayDataset);
+    };
+
+    // 4. HIỂN THỊ DỮ LIỆU
+    const renderDashboard = (data) => {
+        updateKPIs(data);
+        renderSalaryTable(data);
+    };
+
+    const updateKPIs = (data) => {
+        const totalPayroll = data.ChamCong.reduce((sum, record) => sum + (parseFloat(record.TienCongNgay) || 0), 0);
+        
+        const totalDeductions = data.GiaoDichLuong.reduce((sum, tx) => {
+            const type = tx.LoaiGiaoDich || '';
+            if (type.includes('Khấu trừ') || type.includes('Tạm ứng')) {
+                return sum + (parseFloat(tx.SoTien) || 0);
+            }
+            return sum;
+        }, 0);
+
+        const netSalary = totalPayroll - totalDeductions;
+        const avgSalary = data.User.length > 0 ? netSalary / data.User.length : 0;
+
+        totalEmployeesEl.textContent = data.User.length;
+        totalPayrollEl.textContent = formatCurrency(totalPayroll);
+        netSalaryEl.textContent = formatCurrency(netSalary);
+        avgSalaryEl.textContent = formatCurrency(avgSalary);
+    };
+
+    const renderSalaryTable = (data) => {
+        const year = yearFilterEl.value;
+        const month = monthFilterEl.value;
+        if (year === 'all' || month === 'all') { 
+            salaryTableContainer.style.display = 'none'; 
+            return; 
+        }
+        
+        salaryTableContainer.style.display = 'block';
+        salaryMonthTitle.textContent = `${month}/${year}`;
+        salaryTableHeader.innerHTML = '';
+        
+        let headerHTML = '<th>TT</th><th>Họ và tên</th>';
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const sundays = new Set();
+        
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(year, month - 1, day);
+            if (date.getDay() === 0) sundays.add(day);
+            headerHTML += `<th class="${sundays.has(day) ? 'sunday-header' : ''}">${day}</th>`;
+        }
+        
+        headerHTML += '<th>Khấu trừ</th><th>Thực lĩnh</th>';
+        salaryTableHeader.innerHTML = headerHTML;
+        
+        const dailyWagesMap = new Map();
+        data.ChamCong.forEach(record => {
+            const userId = record.ID_NhanVien?.toString();
+            if (!userId) return;
+            
+            const day = new Date(record.Ngay).getDate();
+            if (!dailyWagesMap.has(userId)) dailyWagesMap.set(userId, {});
+            dailyWagesMap.get(userId)[day] = parseFloat(record.TienCongNgay) || 0;
+        });
+        
+        const deductionsMap = new Map();
+        data.GiaoDichLuong.forEach(tx => {
+            const type = tx.LoaiGiaoDich || '';
+            if (type.includes('Khấu trừ') || type.includes('Tạm ứng')) {
+                const userId = tx.ID_NhanVien?.toString();
+                if (!userId) return;
+                
+                const currentDeductions = deductionsMap.get(userId) || 0;
+                deductionsMap.set(userId, currentDeductions + (parseFloat(tx.SoTien) || 0));
+            }
+        });
+        
+        salaryTableBody.innerHTML = '';
+        data.User.forEach((user, index) => {
+            const userId = user.ID?.toString();
+            if (!userId) return;
+            
+            let rowHTML = `<tr><td>${index + 1}</td><td>${user['Họ và tên'] || ''}</td>`;
+            let totalSalary = 0;
+            const userWages = dailyWagesMap.get(userId) || {};
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                const wage = userWages[day] || 0;
+                totalSalary += wage;
+                const isSunday = sundays.has(day);
+                
+                // Tạo input cho phép chỉnh sửa tiền công ngày
+                const dateStr = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                rowHTML += `
+                    <td class="${isSunday ? 'sunday-cell' : ''}">
+                        <input type="number" 
+                               class="daily-wage-input" 
+                               data-user-id="${userId}" 
+                               data-date="${dateStr}"
+                               value="${wage > 0 ? wage : ''}"
+                               placeholder="0"
+                               onchange="updateDailyWage(this)">
+                    </td>
+                `;
+            }
+            
+            const deductions = deductionsMap.get(userId) || 0;
+            const finalSalary = totalSalary - deductions;
+            rowHTML += `<td>${deductions > 0 ? formatCurrency(deductions) : ''}</td>`;
+            rowHTML += `<td><b>${formatCurrency(finalSalary)}</b></td>`;
+            rowHTML += '</tr>';
+            salaryTableBody.innerHTML += rowHTML;
+        });
+    };
+
+    // Hàm mới: Hiển thị bảng nhân viên
+    const renderEmployeeTable = () => {
+        employeeTableBody.innerHTML = '';
+        fullDataset.User.forEach((user, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${user.ID || ''}</td>
+                <td>${user['Họ và tên'] || ''}</td>
+                <td>${user['Chức vụ'] || ''}</td>
+                <td>${user['Phòng ban'] || ''}</td>
+                <td>${user['Ngày vào làm'] || ''}</td>
+                <td>${user['Lương cơ bản'] ? formatCurrency(user['Lương cơ bản']) : ''}</td>
+                <td>${user['Trạng thái'] || 'Đang làm việc'}</td>
+                <td>
+                    <button class="btn-edit" data-id="${user.ID}"><i class="fas fa-edit"></i></button>
+                    <button class="btn-delete" data-id="${user.ID}"><i class="fas fa-trash"></i></button>
+                </td>
+            `;
+            employeeTableBody.appendChild(row);
+        });
+    };
+
+    // Hàm mới: Cập nhật tiền công ngày
+    window.updateDailyWage = function(inputElement) {
+        const userId = inputElement.getAttribute('data-user-id');
+        const date = inputElement.getAttribute('data-date');
+        const amount = parseFloat(inputElement.value) || 0;
+        
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(() => {
+                showLoading(false);
+                fetchData(); // Refresh data after update
+            })
+            .withFailureHandler((error) => {
+                showLoading(false);
+                alert('Lỗi khi cập nhật: ' + error.message);
+                inputElement.value = '';
+            })
+            .updateDailyWage(userId, date, amount);
+    };
+
+    // Hàm hỗ trợ
+    const formatCurrency = (value) => {
+        return Math.round(Number(value) || 0).toLocaleString('vi-VN', {
+            style: 'currency',
+            currency: 'VND'
+        });
+    };
+
+    const showLoading = (isLoading) => {
+        loadingIndicator.style.display = isLoading ? 'flex' : 'none';
+        dataContainer.style.display = isLoading ? 'none' : 'block';
+        if (isLoading) salaryTableContainer.style.display = 'none';
+    };
+
+    const switchView = (viewId) => {
+        contentViews.forEach(view => {
+            view.style.display = view.id === viewId ? 'block' : 'none';
+        });
+        
+        // Cập nhật active state cho menu
+        navLinks.forEach(link => {
+            if (link.getAttribute('data-target') === viewId) {
+                link.parentElement.classList.add('active');
+            } else {
+                link.parentElement.classList.remove('active');
+            }
+        });
+    };
+
+    // 5. EVENT LISTENERS
+    monthFilterEl.addEventListener('change', applyFilters);
+    yearFilterEl.addEventListener('change', applyFilters);
+    exportExcelBtn.addEventListener('click', () => alert("Chức năng xuất Excel sẽ được triển khai sau"));
+    exportPdfBtn.addEventListener('click', () => alert("Chức năng xuất PDF sẽ được triển khai sau"));
+    addEmployeeBtn.addEventListener('click', () => alert("Chức năng thêm nhân viên sẽ được triển khai sau"));
+    refreshEmployeeBtn.addEventListener('click', fetchData);
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetView = link.getAttribute('data-target');
+            switchView(targetView);
+        });
+    });
+
+    // 6. KHỞI CHẠY
+    switchView('dashboard-view');
+    fetchData();
+});
+</script>

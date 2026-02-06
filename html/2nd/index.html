@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Quản Lý Tổng Hợp</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --sidebar-bg: #1e4620; --sidebar-link: #e9ecef; --sidebar-hover: #2a622c; --sidebar-active: #059669; }
+        body { font-family: 'Roboto', sans-serif; background-color: #f0f2f5; }
+        .wrapper { display: flex; width: 100%; min-height: 100vh; }
+        #sidebar { width: 260px; min-width: 260px; background: var(--sidebar-bg); color: var(--sidebar-link); transition: all 0.3s; }
+        #sidebar .sidebar-header { padding: 20px; background: rgba(0,0,0,0.1); text-align: center; }
+        #sidebar .sidebar-header img { max-width: 180px; margin-bottom: 15px; border-radius: 8px; }
+        #sidebar .sidebar-header h5 { font-size: 1.1rem; font-weight: bold; }
+        #sidebar ul li a { padding: 12px 20px; font-size: 1.05em; display: block; color: var(--sidebar-link); text-decoration: none; transition: all 0.2s; border-radius: 4px; margin: 2px 10px; }
+        #sidebar ul li a:hover, #sidebar ul li a[aria-expanded="true"], #sidebar ul li.active > a { color: #fff; background: var(--sidebar-hover); }
+        #sidebar ul li a i { margin-right: 10px; }
+        #sidebar ul ul a { font-size: 0.95em !important; padding-left: 40px !important; background: rgba(0,0,0,0.1); }
+        #content { flex-grow: 1; padding: 2rem; }
+        .table-wrapper { max-height: 65vh; overflow: auto; }
+        .view-container { animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        /* Thêm CSS mới cho sắp xếp bảng */
+        .sortable { cursor: pointer; position: relative; }
+        .sortable::after {
+            content: "⇅";
+            margin-left: 5px;
+            font-size: 12px;
+            opacity: 0.5;
+        }
+        .sortable.asc::after {
+            content: "↑";
+            opacity: 1;
+        }
+        .sortable.desc::after {
+            content: "↓";
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <nav id="sidebar">
+             <div class="sidebar-header">
+                <img src="https://raw.githubusercontent.com/impactslowforest/Logo/refs/heads/main/CDX%20logo%20banner.jpg" alt="Logo Công ty Con Đường Xanh" class="img-fluid" style="margin-bottom: 15px; border-radius: 8px; max-width: 180px;">
+                <h5 style="color: white; font-size: 1.1rem; font-weight: bold;">Quản lý kho công trình<br>Công ty Con Đường Xanh</h5>
+            </div>
+            <ul class="list-unstyled components">
+                <li class="active"><a href="#" class="nav-link" data-view="overview-view"><i class="fas fa-tachometer-alt"></i> Tổng Quan</a></li>
+                <li>
+                    <a href="#shoppingSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle"><i class="fas fa-shopping-cart"></i> Mua sắm</a>
+                    <ul class="collapse list-unstyled" id="shoppingSubmenu">
+                        <li><a href="#" class="nav-link" data-view="shopping-view">Quản lý Mua sắm</a></li>
+                        <li><a href="#">Báo cáo Chi phí</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="#hrSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle"><i class="fas fa-users-cog"></i> Quản lý Nhân sự</a>
+                    <ul class="collapse list-unstyled" id="hrSubmenu">
+                        <li><a href="#">Chấm công</a></li>
+                        <li><a href="#" class="nav-link" data-view="payroll-view">Bảng lương</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="#settingsSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle"><i class="fas fa-cog"></i> Cài đặt</a>
+                    <ul class="collapse list-unstyled" id="settingsSubmenu">
+                        <li><a href="#">Phân quyền</a></li>
+                        <li><a href="#" class="nav-link" data-view="api-manager-view">Quản lý API</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+
+        <main id="content">
+            <div id="loader" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1050;">
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+            </div>
+
+            <div id="overview-view" class="view-container"></div>
+            <div id="api-manager-view" class="view-container" style="display: none;"></div>
+            <div id="payroll-view" class="view-container" style="display: none;"></div>
+
+            <div id="shopping-view" class="view-container" style="display: none;">
+                <div class="card shadow-sm"><div class="card-header"><h5 class="mb-0">BẢNG KÊ CHI TIẾT CHI PHÍ MUA SẮM</h5></div><div class="card-body"><div class="d-flex flex-wrap gap-2 align-items-end border p-3 rounded mb-3"><div><label class="form-label">Từ ngày</label><input type="date" id="shopping-from-date" class="form-control"></div><div><label class="form-label">Đến ngày</label><input type="date" id="shopping-to-date" class="form-control"></div><div><label class="form-label">Nội dung</label><input type="text" id="shopping-content-filter" class="form-control" placeholder="Tìm nội dung..."></div><div><label class="form-label">Loại chi phí</label><select id="shopping-type-filter" class="form-select"><option value="">Tất cả</option></select></div><div><label class="form-label">Tên kho</label><select id="shopping-warehouse-filter" class="form-select"><option value="">Tất cả</option></select></div><div><button class="btn btn-primary" id="apply-shopping-filter"><i class="fas fa-filter"></i> Lọc</button><button class="btn btn-secondary ms-2" id="reset-shopping-filter"><i class="fas fa-undo"></i> Reset</button></div></div><div class="table-wrapper"><table class="table table-bordered table-striped table-hover"><thead class="table-dark sticky-top"><tr><th>TT</th><th class="sortable">Nội dung</th><th class="sortable">Loại chi phí</th><th class="sortable">Tên kho</th><th class="sortable">Ngày chi</th><th class="sortable">Số lượng</th><th class="sortable">Đơn giá</th><th class="sortable">Số tiền</th><th class="sortable">Người chi</th></tr></thead><tbody id="shopping-table-body"></tbody></table></div></div></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbxuG90kyHH9e2Cp8eRxHghGlfoSf4Sx5j3M0v5GOtTWDgipBASd7Mw2k4_Uajn9OVFJqA/exec";
+        let hrDataCache, statsDataCache, shoppingDataCache;
+        let financeChart, hrChart;
+
+        // --- CORE & NAVIGATION ---
+        function showView(viewId) { /* Logic kept the same */ }
+        function setActiveLink(clickedLink) { /* Logic kept the same */ }
+        document.querySelectorAll('#sidebar a.nav-link').forEach(link => { /* Logic kept the same */ });
+
+        // --- API & UTILITIES ---
+        function showLoader(isLoading) { document.getElementById('loader').style.display = isLoading ? 'flex' : 'none'; }
+        function formatCurrency(num) { return (typeof num === 'number') ? num.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' }) : '0 ₫'; }
+        function displayJson(data) { document.getElementById('json-result-area').textContent = JSON.stringify(data, null, 2); }
+        function runApiCall(action, params = {}, callback) { /* Logic kept the same */ }
+
+        // --- SHOPPING VIEW ---
+        function initializeShoppingView() { 
+            if (document.getElementById('shopping-table-body').dataset.initialized) return; 
+            document.getElementById('apply-shopping-filter').addEventListener('click', () => renderShoppingTable(shoppingDataCache));
+            document.getElementById('reset-shopping-filter').addEventListener('click', resetShoppingFilters);
+            
+            // Thêm sự kiện sắp xếp cho các cột
+            document.querySelectorAll('#shopping-view .sortable').forEach(header => {
+                header.addEventListener('click', () => {
+                    const table = header.closest('table');
+                    const headerIndex = Array.from(header.parentNode.children).indexOf(header);
+                    const currentIsAscending = header.classList.contains('asc');
+                    
+                    // Xóa tất cả các lớp sắp xếp hiện có
+                    table.querySelectorAll('.sortable').forEach(h => {
+                        h.classList.remove('asc', 'desc');
+                    });
+                    
+                    // Thiết lập lớp mới cho header được nhấp
+                    header.classList.toggle('asc', !currentIsAscending);
+                    header.classList.toggle('desc', currentIsAscending);
+                    
+                    // Sắp xếp dữ liệu
+                    sortTable(headerIndex, !currentIsAscending);
+                });
+            });
+            
+            if (shoppingDataCache) { 
+                renderShoppingTable(shoppingDataCache); 
+            } else { 
+                runApiCall('getBusinessData', { business: 'shopping' }, data => { 
+                    shoppingDataCache = data; 
+                    populateShoppingFilters(data.chiphiChitiet); 
+                    renderShoppingTable(data); 
+                    document.getElementById('shopping-table-body').dataset.initialized = 'true'; 
+                }); 
+            } 
+        }
+        
+        function resetShoppingFilters() {
+            document.getElementById('shopping-from-date').value = '';
+            document.getElementById('shopping-to-date').value = '';
+            document.getElementById('shopping-content-filter').value = '';
+            document.getElementById('shopping-type-filter').value = '';
+            document.getElementById('shopping-warehouse-filter').value = '';
+            renderShoppingTable(shoppingDataCache);
+        }
+        
+        function sortTable(columnIndex, ascending) {
+            const tbody = document.getElementById('shopping-table-body');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            rows.sort((a, b) => {
+                const aCell = a.cells[columnIndex].textContent.trim();
+                const bCell = b.cells[columnIndex].textContent.trim();
+                
+                // Xử lý đặc biệt cho các cột số và ngày
+                if (columnIndex === 5 || columnIndex === 6 || columnIndex === 7) { // Số lượng, Đơn giá, Số tiền
+                    const aValue = parseFloat(aCell.replace(/[^\d,]/g, '').replace(',', '')) || 0;
+                    const bValue = parseFloat(bCell.replace(/[^\d,]/g, '').replace(',', '')) || 0;
+                    return ascending ? aValue - bValue : bValue - aValue;
+                } else if (columnIndex === 4) { // Ngày chi
+                    const aParts = aCell.split('/');
+                    const bParts = bCell.split('/');
+                    const aDate = aParts.length === 3 ? new Date(`${aParts[2]}-${aParts[1]}-${aParts[0]}`) : 0;
+                    const bDate = bParts.length === 3 ? new Date(`${bParts[2]}-${bParts[1]}-${bParts[0]}`) : 0;
+                    return ascending ? aDate - bDate : bDate - aDate;
+                } else {
+                    // Sắp xếp chuỗi bình thường
+                    return ascending 
+                        ? aCell.localeCompare(bCell, 'vi', { sensitivity: 'base' })
+                        : bCell.localeCompare(aCell, 'vi', { sensitivity: 'base' });
+                }
+            });
+            
+            // Xóa các hàng hiện tại và thêm lại theo thứ tự đã sắp xếp
+            tbody.innerHTML = '';
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        function populateShoppingFilters(details) { /* Logic kept the same */ }
+       
+        function renderShoppingTable(data) {
+            if(!data || !Array.isArray(data.chiphi) || !Array.isArray(data.chiphiChitiet)) return;
+            const { chiphi, chiphiChitiet } = data;
+            const fromDate = document.getElementById('shopping-from-date').value;
+            const toDate = document.getElementById('shopping-to-date').value;
+            const content = document.getElementById('shopping-content-filter').value.toLowerCase();
+            const type = document.getElementById('shopping-type-filter').value;
+            const warehouse = document.getElementById('shopping-warehouse-filter').value;
+
+            const spenderMap = chiphi.reduce((map, item) => {
+                map[item.ID] = item.Nguoilap;
+                return map;
+            }, {});
+
+            const filteredData = chiphiChitiet.filter(item => {
+                const itemDate = item.Ngaychi ? item.Ngaychi.split(' ')[0] : null;
+                return (!fromDate || (itemDate && itemDate >= fromDate)) &&
+                       (!toDate || (itemDate && itemDate <= toDate)) &&
+                       (!content || (item.NoiDung || '').toLowerCase().includes(content)) &&
+                       (!type || item.LoaiChiPhi === type) &&
+                       (!warehouse || item.Ten_Kho === warehouse);
+            });
+
+            const tbody = document.getElementById('shopping-table-body');
+            tbody.innerHTML = filteredData.map((item, index) => {
+                // Định dạng ngày tháng thành dd/mm/yyyy
+                let formattedDate = '';
+                if (item.Ngaychi) {
+                    const dateParts = item.Ngaychi.split(' ')[0].split('-');
+                    if (dateParts.length === 3) {
+                        formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+                    }
+                }
+                
+                return `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${item.NoiDung || ''}</td>
+                        <td>${item.LoaiChiPhi || ''}</td>
+                        <td>${item.Ten_Kho || ''}</td>
+                        <td>${formattedDate}</td>
+                        <td class="text-center">${item.SoLuong || 0}</td>
+                        <td class="text-end">${formatCurrency(parseFloat(item.Dongia) || 0)}</td>
+                        <td class="text-end">${formatCurrency(parseFloat(item.SoTien) || 0)}</td>
+                        <td>${spenderMap[item.ID_ChiPhi] || ''}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+       
+        // --- PAYROLL VIEW ---
+        function initializePayrollView() { /* Logic kept the same */ }
+        function fetchAndRenderPayroll(forceRefetch = false) { /* Logic kept the same */ }
+        function renderPayrollTable(data) { /* Logic kept the same */ }
+       
+        // --- OVERVIEW VIEW ---
+        function initializeOverviewView() { /* Logic kept the same */ }
+        function renderOverview(stats) { /* Logic kept the same */ }
+        function renderFinanceChart(stats) { /* Logic kept the same */ }
+        function renderHrChart(hrData) { /* Logic kept the same */ }
+
+        // --- DYNAMIC CONTENT & INITIALIZATION ---
+        function loadViewContent(viewId) { /* Logic kept the same */ }
+        document.addEventListener('DOMContentLoaded', () => { /* Logic kept the same */ });
+       
+        // --- ALL HELPER FUNCTIONS ---
+        showView = function(viewId) { document.querySelectorAll('.view-container').forEach(v => v.style.display = 'none'); const targetView = document.getElementById(viewId); if(targetView) { if(!targetView.innerHTML) loadViewContent(viewId); targetView.style.display = 'block'; } if (viewId === 'overview-view') initializeOverviewView(); if (viewId === 'payroll-view') initializePayrollView(); if (viewId === 'shopping-view') initializeShoppingView(); };
+        setActiveLink = function(clickedLink) { document.querySelectorAll('#sidebar li.active').forEach(li => li.classList.remove('active')); const parentLi = clickedLink.closest('li'); parentLi.classList.add('active'); const parentUl = parentLi.closest('ul.collapse'); if(parentUl) parentUl.closest('li').classList.add('active'); };
+        document.querySelectorAll('#sidebar a.nav-link').forEach(link => { link.addEventListener('click', e => { e.preventDefault(); showView(link.dataset.view); setActiveLink(link); }); });
+        runApiCall = function(action, params = {}, callback) { showLoader(true); fetch(`${API_URL}?${new URLSearchParams({ action, ...params })}`).then(res => res.ok ? res.json() : Promise.reject(`Lỗi mạng: ${res.status}`)).then(data => { if (callback) callback(data); }).catch(err => { console.error(`API Error ('${action}'):`, err); alert("Lỗi API: " + err); }).finally(() => showLoader(false)); };
+        initializeOverviewView = function() { if (statsDataCache) return renderOverview(statsDataCache); runApiCall('getStats', {}, data => { statsDataCache = data; renderOverview(data); if (!hrDataCache) runApiCall('getBusinessData', { business: 'hr' }, hrData => { hrDataCache = hrData; renderHrChart(hrData); }); else renderHrChart(hrDataCache); }); };
+        renderOverview = function(stats) { if (!stats?.hr) return; document.getElementById('total-employees').textContent = stats.hr.totalEmployees; document.getElementById('active-employees').textContent = stats.hr.activeEmployees; document.getElementById('total-expenses').textContent = formatCurrency(stats.costs.totalExpenses); document.getElementById('total-inventory-value').textContent = formatCurrency(stats.inventory.totalValue); renderFinanceChart(stats); };
+        renderFinanceChart = function(stats) { const ctx = document.getElementById('finance-chart')?.getContext('2d'); if(!ctx) return; const data = { labels: ['Tổng Chi Phí', 'Chi Lương', 'Tồn Kho'], datasets: [{ label: 'Phân Tích Tài Chính', data: [stats.costs.totalExpenses, stats.hr.totalSalaryPaid, stats.inventory.totalValue], backgroundColor: ['#28a745', '#0dcaf0', '#ffc107'] }] }; if(financeChart) { financeChart.data = data; financeChart.update(); } else { financeChart = new Chart(ctx, { type: 'bar', data, options: { indexAxis: 'y', responsive: true }}); } };
+        renderHrChart = function(hrData) { const ctx = document.getElementById('hr-chart')?.getContext('2d'); if(!ctx) return; const departmentCounts = hrData.users.reduce((acc, user) => { const dept = user['Bộ phận'] || 'Chưa phân loại'; acc[dept] = (acc[dept] || 0) + 1; return acc; }, {}); const data = { labels: Object.keys(departmentCounts), datasets: [{ data: Object.values(departmentCounts), backgroundColor: ['#0d6efd', '#6f42c1', '#d63384', '#fd7e14', '#198754'] }] }; if(hrChart) { hrChart.data = data; hrChart.update(); } else { hrChart = new Chart(ctx, { type: 'doughnut', data, options: { responsive: true }}); } };
+        initializePayrollView = function() { const monthSelect = document.getElementById('month-filter'); if (monthSelect.options.length > 0) return; const yearSelect = document.getElementById('year-filter'), now = new Date(), currentYear = now.getFullYear(), currentMonth = now.getMonth() + 1; for (let i = 1; i <= 12; i++) monthSelect.add(new Option(i, i, i === currentMonth)); for (let i = currentYear; i >= currentYear - 5; i--) yearSelect.add(new Option(i, i, i === currentYear)); document.getElementById('apply-payroll-filter').addEventListener('click', () => fetchAndRenderPayroll(true)); fetchAndRenderPayroll(); };
+        fetchAndRenderPayroll = function(forceRefetch = false) { if (hrDataCache && !forceRefetch) return renderPayrollTable(hrDataCache); runApiCall('getBusinessData', { business: 'hr' }, data => { hrDataCache = data; renderPayrollTable(data); }); };
+        renderPayrollTable = function(data) { const month = parseInt(document.getElementById('month-filter').value), year = parseInt(document.getElementById('year-filter').value); document.getElementById('payroll-title').textContent = `BẢNG LƯƠNG CHI TIẾT THÁNG ${month}/${year}`; const daysInMonth = new Date(year, month, 0).getDate(); const thead = document.querySelector('#payroll-view thead tr'); thead.innerHTML = `<th>TT</th><th class="text-start" style="min-width: 180px;">Tên Nhân Viên</th>`; for(let i = 1; i <= daysInMonth; i++) thead.innerHTML += `<th>${i}</th>`; thead.innerHTML += `<th style="min-width: 150px;">Thực Lĩnh</th><th style="min-width: 120px;">Khấu Trừ</th>`; const payrollData = data.users.reduce((acc, user) => { if(user?.ID) acc[user.ID] = { name: user['Họ và tên'] || 'N/A', days: Array(daysInMonth + 1).fill(0) }; return acc; }, {}); data.chamCong.forEach(rec => { const recDate = new Date(rec.Ngày); if (recDate.getFullYear() === year && (recDate.getMonth() + 1) === month) { const employee = payrollData[rec.ID_NhanVien || rec['ID nhân viên']]; if (employee) employee.days[recDate.getDate()] = parseFloat(rec.TienCongNgay) || 0; } }); const tbody = document.getElementById('payroll-table-body'); tbody.innerHTML = Object.keys(payrollData).map((id, index) => { const emp = payrollData[id]; const daysHtml = emp.days.slice(1).map(s => `<td>${s > 0 ? s.toLocaleString('vi-VN') : '-'}</td>`).join(''); const total = emp.days.reduce((a, b) => a + b, 0); return `<tr><td>${index + 1}</td><td class="text-start">${emp.name}</td>${daysHtml}<td class="fw-bold">${formatCurrency(total)}</td><td>-</td></tr>`; }).join(''); };
+        populateShoppingFilters = function(details) { const types = [...new Set(details.map(item => item.LoaiChiPhi).filter(Boolean))]; const warehouses = [...new Set(details.map(item => item.Ten_Kho).filter(Boolean))]; const typeSelect = document.getElementById('shopping-type-filter'); const warehouseSelect = document.getElementById('shopping-warehouse-filter'); typeSelect.innerHTML = '<option value="">Tất cả</option>'; warehouseSelect.innerHTML = '<option value="">Tất cả</option>'; types.forEach(t => typeSelect.add(new Option(t, t))); warehouses.forEach(w => warehouseSelect.add(new Option(w, w))); };
+        loadViewContent = function(viewId) { const view = document.getElementById(viewId); if (view && view.innerHTML) return; let htmlContent = ''; switch(viewId) { case 'overview-view': htmlContent = `<div class="row g-4 mb-4"><div class="col-md-6 col-lg-3"><div class="card kpi-card bg-primary text-white"><div class="card-body"><h6 class="card-subtitle">Tổng nhân sự</h6><h4 class="card-title fw-bold" id="total-employees">...</h4></div></div></div><div class="col-md-6 col-lg-3"><div class="card kpi-card bg-success text-white"><div class="card-body"><h6 class="card-subtitle">Tổng chi phí</h6><h4 class="card-title fw-bold" id="total-expenses">...</h4></div></div></div><div class="col-md-6 col-lg-3"><div class="card kpi-card bg-warning text-dark"><div class="card-body"><h6 class="card-subtitle">Giá trị tồn kho</h6><h4 class="card-title fw-bold" id="total-inventory-value">...</h4></div></div></div><div class="col-md-6 col-lg-3"><div class="card kpi-card bg-info text-white"><div class="card-body"><h6 class="card-subtitle">Nhân sự hoạt động</h6><h4 class="card-title fw-bold" id="active-employees">...</h4></div></div></div></div><div class="row g-4"><div class="col-lg-7"><div class="card shadow-sm h-100"><div class="card-header fw-bold">Biểu đồ tài chính</div><div class="card-body"><canvas id="finance-chart"></canvas></div></div></div><div class="col-lg-5"><div class="card shadow-sm h-100"><div class="card-header fw-bold">Thành phần nhân sự</div><div class="card-body"><canvas id="hr-chart"></canvas></div></div></div></div>`; break; case 'api-manager-view': htmlContent = `<div class="card shadow-sm"><div class="card-header fw-bold"><i class="fas fa-cogs"></i> Bảng điều khiển API</div><div class="card-body text-center"><div class="btn-group flex-wrap" role="group"><button onclick="runApiCall('getAll', {}, displayJson)" class="btn btn-outline-success m-1">Lấy Tất Cả</button><button onclick="runApiCall('getUserData', {}, displayJson)" class="btn btn-outline-info m-1">Dữ Liệu Users</button></div></div></div><div class="card shadow-sm mt-4"><div class="card-header fw-bold"><i class="fas fa-file-code"></i> Kết quả API (JSON)</div><div class="card-body"><pre id="json-result-area">Chọn một hành động để xem kết quả...</pre></div></div>`; break; case 'payroll-view': htmlContent = `<div class="card shadow-sm"><div class="card-header"><h5 class="mb-0" id="payroll-title">BẢNG LƯƠNG CHI TIẾT</h5></div><div class="card-body"><div class="row g-3 align-items-center mb-3"><div class="col-auto"><label class="col-form-label">Tháng</label></div><div class="col-auto"><select class="form-select" id="month-filter"></select></div><div class="col-auto"><label class="col-form-label">Năm</label></div><div class="col-auto"><select class="form-select" id="year-filter"></select></div><div class="col-auto"><button class="btn btn-primary" id="apply-payroll-filter"><i class="fas fa-filter"></i> Lọc</button></div></div><div class="table-wrapper"><table class="table table-bordered table-striped table-hover text-center"><thead class="table-dark sticky-top"><tr><th>TT</th><th class="text-start" style="min-width: 180px;">Tên Nhân Viên</th></tr></thead><tbody id="payroll-table-body"></tbody></table></div></div></div>`; break; } if(view) { view.innerHTML = htmlContent; if (viewId === 'shopping-view' && !document.getElementById('shopping-table-body').dataset.initialized) { initializeShoppingView(); } } };
+        document.addEventListener('DOMContentLoaded', () => { setActiveLink(document.querySelector('#sidebar a.nav-link[data-view="overview-view"]')); showView('overview-view'); });
+    </script>
+</body>
+</html>

@@ -1,0 +1,373 @@
+<style>
+  /* General Styling */
+  :root {
+      --primary-color: #3b82f6; /* Blue */
+      --secondary-color: #1e293b; /* Dark Blue/Gray */
+      --background-color: #f1f5f9; /* Light Gray */
+      --sidebar-bg: #ffffff;
+      --card-bg: #ffffff;
+      --text-color: #334155;
+      --text-light: #64748b;
+      --border-color: #e2e8f0;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  }
+
+  * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+  }
+
+  body {
+      font-family: 'Roboto', sans-serif;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      line-height: 1.6;
+  }
+
+  .dashboard-container {
+      display: flex;
+      min-height: 100vh;
+  }
+
+  /* Sidebar */
+  .sidebar {
+      width: 260px;
+      background-color: var(--sidebar-bg);
+      padding: 24px;
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+  }
+
+  .sidebar-header {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 2rem;
+      color: var(--secondary-color);
+  }
+
+  .sidebar ul {
+      list-style: none;
+  }
+
+  .sidebar ul li a {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      color: var(--text-light);
+      text-decoration: none;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      transition: background-color 0.3s, color 0.3s;
+  }
+
+  .sidebar ul li a i {
+      margin-right: 12px;
+      width: 20px;
+      text-align: center;
+  }
+
+  .sidebar ul li.active a,
+  .sidebar ul li a:hover {
+      background-color: var(--primary-color);
+      color: white;
+  }
+
+  /* Main Content */
+  .main-content {
+      flex-grow: 1;
+      padding: 24px 32px;
+  }
+
+  .main-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+  }
+
+  .main-header h2 {
+      font-size: 1.75rem;
+      color: var(--secondary-color);
+  }
+
+  .header-actions button {
+      margin-left: 12px;
+      padding: 10px 16px;
+      border: 1px solid var(--border-color);
+      background-color: white;
+      color: var(--text-color);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: background-color 0.3s, color 0.3s;
+  }
+
+  .header-actions button:hover {
+      background-color: var(--background-color);
+  }
+
+  .header-actions button i {
+      margin-right: 8px;
+  }
+
+  /* Filters */
+  .filters {
+      display: flex;
+      gap: 16px;
+      align-items: flex-end;
+      margin-bottom: 24px;
+      padding: 20px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+  }
+
+  .filter-item {
+      display: flex;
+      flex-direction: column;
+  }
+
+  .filter-item label {
+      font-size: 0.85rem;
+      margin-bottom: 6px;
+      color: var(--text-light);
+  }
+
+  .filter-item select {
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-size: 0.9rem;
+      background-color: white;
+  }
+
+  /* KPI Cards */
+  .kpi-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+      margin-bottom: 24px;
+  }
+
+  .card {
+      background-color: var(--card-bg);
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      text-align: center;
+  }
+
+  .kpi-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--primary-color);
+      margin-bottom: 8px;
+  }
+
+  .kpi-label {
+      font-size: 1rem;
+      color: var(--text-light);
+  }
+
+  /* Loading Indicator */
+  .loading-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      padding: 40px;
+      background-color: #eef2ff;
+      border: 1px dashed #c7d2fe;
+      border-radius: 8px;
+      color: var(--primary-color);
+      font-size: 1.1rem;
+      font-weight: 500;
+  }
+
+  .spinner {
+      width: 24px;
+      height: 24px;
+      border: 4px solid #c7d2fe;
+      border-top-color: var(--primary-color);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+      to {
+          transform: rotate(360deg);
+      }
+  }
+
+  /* Data Tables */
+  .data-tables {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+  }
+
+  .table-wrapper {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 24px;
+  }
+
+  .table-wrapper h3 {
+      font-size: 1.2rem;
+      margin-bottom: 16px;
+      color: var(--secondary-color);
+  }
+
+  .table-container {
+      max-height: 400px;
+      overflow-y: auto;
+  }
+  
+  .table-container-horizontal {
+      width: 100%;
+      overflow-x: auto; /* Cho phép cuộn ngang */
+  }
+
+  table {
+      width: 100%;
+      border-collapse: collapse;
+  }
+  
+  #salary-table {
+      white-space: nowrap; /* Ngăn các cột bị xuống dòng */
+  }
+
+  th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+  }
+
+  thead th {
+      background-color: #f8fafc;
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: var(--text-light);
+      position: sticky;
+      top: 0;
+  }
+
+  tbody tr:hover {
+      background-color: var(--background-color);
+  }
+  
+  .salary-table-section {
+      margin-top: 24px;
+  }
+  
+  /* Tô màu đỏ cho header và cell của ngày Chủ Nhật */
+  .sunday-header, .sunday-cell {
+      color: #ef4444; /* Màu đỏ */
+      font-weight: bold;
+  }
+
+  /* Responsive */
+  @media (max-width: 1200px) {
+      .data-tables {
+          grid-template-columns: 1fr;
+      }
+  }
+
+  @media (max-width: 992px) {
+      .sidebar {
+          display: none; /* Hide sidebar on smaller screens */
+      }
+      .filters {
+          flex-direction: column;
+          align-items: stretch;
+      }
+  }
+
+  @media (max-width: 768px) {
+      .main-header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 16px;
+      }
+      .main-content {
+          padding: 16px;
+      }
+  }
+  /* Thêm style cho tab navigation */
+  .content-view {
+      display: none;
+  }
+  
+  .content-view.active {
+      display: block;
+  }
+
+  /* Style cho bảng nhân viên */
+  #employee-table {
+      width: 100%;
+      border-collapse: collapse;
+  }
+  
+  #employee-table th {
+      background-color: #f8fafc;
+      font-weight: 500;
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+  }
+  
+  #employee-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-color);
+  }
+  
+  #employee-table tr:hover {
+      background-color: var(--background-color);
+  }
+  
+  .btn-edit, .btn-delete {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 5px;
+      margin: 0 3px;
+      color: var(--text-light);
+  }
+  
+  .btn-edit:hover {
+      color: var(--primary-color);
+  }
+  
+  .btn-delete:hover {
+      color: #ef4444;
+  }
+
+  /* Style cho input nhập liệu */
+  .daily-wage-input {
+      width: 80px;
+      padding: 5px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      text-align: right;
+  }
+  
+  .daily-wage-input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+      .daily-wage-input {
+          width: 60px;
+      }
+      
+      #employee-table th, #employee-table td {
+          padding: 8px 10px;
+      }
+  }
+</style>

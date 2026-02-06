@@ -1,0 +1,367 @@
+/**
+ * Google Apps Script để lấy dữ liệu từ các sheet cho Dashboard Chấm Công & Lương
+ * Phục vụ cho HTML Dashboard tương tự như code_chuan.txt
+ * 
+ * Cách sử dụng:
+ * 1. Tạo Google Apps Script project mới
+ * 2. Copy code này vào Code.gs
+ * 3. Deploy as Web App
+ * 4. Copy URL được tạo ra để sử dụng trong HTML
+ */
+
+// === MAIN FUNCTION - Được gọi từ HTML Dashboard ===
+function doGet(e) {
+  try {
+    // Lấy dữ liệu từ tất cả các sheet
+    const allData = {
+      User: getUserData(),
+      ChamCong: getChamCongData(),
+      GiaoDichLuong: getGiaoDichLuongData(),
+      LichSuLuong: getLichSuLuongData()
+    };
+    
+    // Trả về JSON response
+    return ContentService
+      .createTextOutput(JSON.stringify(allData))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (error) {
+    console.error('Lỗi trong doGet:', error);
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        error: 'Có lỗi xảy ra khi lấy dữ liệu: ' + error.message,
+        details: error.stack
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// === CONFIGURATION - Cấu hình tên các sheet ===
+const SHEET_CONFIG = {
+  SPREADSHEET_ID: null, // Sẽ tự động lấy spreadsheet hiện tại
+  SHEETS: {
+    USER: 'User',
+    CHAMCONG: 'ChamCong', 
+    GIAODICHLUONG: 'GiaoDichLuong',
+    LICHSULUONG: 'LichSuLuong'
+  }
+};
+
+// === HELPER FUNCTIONS ===
+
+/**
+ * Lấy spreadsheet hiện tại
+ */
+function getSpreadsheet() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+/**
+ * Kiểm tra xem sheet có tồn tại không
+ */
+function sheetExists(sheetName) {
+  const ss = getSpreadsheet();
+  return ss.getSheetByName(sheetName) !== null;
+}
+
+/**
+ * Chuyển đổi dữ liệu từ range thành array of objects
+ */
+function rangeToObjects(range) {
+  if (!range || range.length === 0) {
+    return [];
+  }
+  
+  const headers = range[0];
+  const dataRows = range.slice(1);
+  
+  return dataRows.map(row => {
+    const obj = {};
+    headers.forEach((header, index) => {
+      // Xử lý các giá trị null/undefined
+      let value = row[index];
+      if (value === null || value === undefined || value === '') {
+        value = '';
+      }
+      // Chuyển đổi Date objects thành string
+      if (value instanceof Date) {
+        value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      }
+      obj[header] = value;
+    });
+    return obj;
+  });
+}
+
+/**
+ * Lấy dữ liệu từ sheet với error handling
+ */
+function getDataFromSheet(sheetName) {
+  try {
+    if (!sheetExists(sheetName)) {
+      console.warn(`Sheet "${sheetName}" không tồn tại.`);
+      return [];
+    }
+    
+    const sheet = getSpreadsheet().getSheetByName(sheetName);
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    
+    if (lastRow <= 1 || lastCol === 0) {
+      console.warn(`Sheet "${sheetName}" trống hoặc chỉ có header.`);
+      return [];
+    }
+    
+    const range = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+    return rangeToObjects(range);
+    
+  } catch (error) {
+    console.error(`Lỗi khi lấy dữ liệu từ sheet "${sheetName}":`, error);
+    return [];
+  }
+}
+
+// === DATA RETRIEVAL FUNCTIONS ===
+
+/**
+ * Lấy dữ liệu từ bảng User
+ * Cấu trúc: ID (Key), Họ và tên, Ngansachdauky
+ */
+function getUserData() {
+  console.log('Đang lấy dữ liệu User...');
+  const data = getDataFromSheet(SHEET_CONFIG.SHEETS.USER);
+  
+  // Validate required columns
+  if (data.length > 0) {
+    const requiredColumns = ['ID', 'Họ và tên'];
+    const firstRow = data[0];
+    const missingColumns = requiredColumns.filter(col => !(col in firstRow));
+    
+    if (missingColumns.length > 0) {
+      console.warn(`Bảng User thiếu các cột: ${missingColumns.join(', ')}`);
+    }
+  }
+  
+  console.log(`Đã lấy ${data.length} bản ghi từ User`);
+  return data;
+}
+
+/**
+ * Lấy dữ liệu từ bảng ChamCong  
+ * Cấu trúc: ID_ChamCong, Mahienthi, ID_NhanVien, Ngày, SoGioCong, SoGioTangCa, 
+ * Kholamviec, NoiDungCongViec, TienTangCa, NgayLuongTaiThoiDiem, Luongcongnhat, 
+ * HeSoTangCaTaiThoiDiem, TienCongNgay
+ */
+function getChamCongData() {
+  console.log('Đang lấy dữ liệu ChamCong...');
+  const data = getDataFromSheet(SHEET_CONFIG.SHEETS.CHAMCONG);
+  
+  // Validate và convert numeric fields
+  const processedData = data.map(row => {
+    // Convert numeric fields
+    const numericFields = [
+      'SoGioCong', 'SoGioTangCa', 'TienTangCa', 'Luongcongnhat', 
+      'HeSoTangCaTaiThoiDiem', 'TienCongNgay'
+    ];
+    
+    numericFields.forEach(field => {
+      if (row[field] !== undefined && row[field] !== '') {
+        row[field] = parseFloat(row[field]) || 0;
+      } else {
+        row[field] = 0;
+      }
+    });
+    
+    return row;
+  });
+  
+  console.log(`Đã lấy ${processedData.length} bản ghi từ ChamCong`);
+  return processedData;
+}
+
+/**
+ * Lấy dữ liệu từ bảng GiaoDichLuong
+ * Cấu trúc: ID_GiaoDich, MaGiaoDich, ID_NhanVien, NgayGiaoDich, 
+ * LoaiGiaoDich, SoTien, GhiChu  
+ */
+function getGiaoDichLuongData() {
+  console.log('Đang lấy dữ liệu GiaoDichLuong...');
+  const data = getDataFromSheet(SHEET_CONFIG.SHEETS.GIAODICHLUONG);
+  
+  // Validate và convert numeric fields
+  const processedData = data.map(row => {
+    // Convert SoTien to number
+    if (row['SoTien'] !== undefined && row['SoTien'] !== '') {
+      row['SoTien'] = parseFloat(row['SoTien']) || 0;
+    } else {
+      row['SoTien'] = 0;
+    }
+    
+    return row;
+  });
+  
+  console.log(`Đã lấy ${processedData.length} bản ghi từ GiaoDichLuong`);
+  return processedData;
+}
+
+/**
+ * Lấy dữ liệu từ bảng LichSuLuong
+ * Cấu trúc: ID_LichSu, ID_NhanVien, NgayApDung, LuongCoBan_Ngay, HeSoTangCa
+ */
+function getLichSuLuongData() {
+  console.log('Đang lấy dữ liệu LichSuLuong...');
+  const data = getDataFromSheet(SHEET_CONFIG.SHEETS.LICHSULUONG);
+  
+  // Validate và convert numeric fields
+  const processedData = data.map(row => {
+    // Convert numeric fields
+    const numericFields = ['LuongCoBan_Ngay', 'HeSoTangCa'];
+    
+    numericFields.forEach(field => {
+      if (row[field] !== undefined && row[field] !== '') {
+        row[field] = parseFloat(row[field]) || 0;
+      } else {
+        row[field] = 0;
+      }
+    });
+    
+    return row;
+  });
+  
+  console.log(`Đã lấy ${processedData.length} bản ghi từ LichSuLuong`);
+  return processedData;
+}
+
+// === UTILITY FUNCTIONS FOR DASHBOARD ===
+
+/**
+ * Lấy thống kê tổng quan (dùng cho KPIs)
+ */
+function getOverallStats() {
+  try {
+    const userData = getUserData();
+    const chamCongData = getChamCongData();
+    const giaoDichData = getGiaoDichLuongData();
+    
+    // Tính toán các KPIs
+    const totalEmployees = userData.length;
+    
+    // Tổng giờ công trong tháng hiện tại
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+    
+    const currentMonthAttendance = chamCongData.filter(record => {
+      if (!record.Ngày) return false;
+      const recordDate = new Date(record.Ngày);
+      return recordDate.getMonth() + 1 === currentMonth && 
+             recordDate.getFullYear() === currentYear;
+    });
+    
+    const totalWorkHours = currentMonthAttendance.reduce((sum, record) => 
+      sum + (parseFloat(record.SoGioCong) || 0), 0
+    );
+    
+    const totalOvertimeHours = currentMonthAttendance.reduce((sum, record) => 
+      sum + (parseFloat(record.SoGioTangCa) || 0), 0
+    );
+    
+    // Tổng tiền lương tháng hiện tại
+    const currentMonthSalary = giaoDichData.filter(record => {
+      if (!record.NgayGiaoDich) return false;
+      const recordDate = new Date(record.NgayGiaoDich);
+      return recordDate.getMonth() + 1 === currentMonth && 
+             recordDate.getFullYear() === currentYear &&
+             record.LoaiGiaoDich === 'Chi lương';
+    });
+    
+    const totalSalaryPaid = currentMonthSalary.reduce((sum, record) => 
+      sum + (parseFloat(record.SoTien) || 0), 0
+    );
+    
+    return {
+      totalEmployees,
+      totalWorkHours: Math.round(totalWorkHours * 100) / 100,
+      totalOvertimeHours: Math.round(totalOvertimeHours * 100) / 100,
+      totalSalaryPaid,
+      currentMonth,
+      currentYear
+    };
+    
+  } catch (error) {
+    console.error('Lỗi khi tính toán thống kê:', error);
+    return {
+      totalEmployees: 0,
+      totalWorkHours: 0,
+      totalOvertimeHours: 0,
+      totalSalaryPaid: 0,
+      currentMonth: new Date().getMonth() + 1,
+      currentYear: new Date().getFullYear()
+    };
+  }
+}
+
+/**
+ * Test function - Chạy thử để kiểm tra dữ liệu
+ */
+function testDataRetrieval() {
+  console.log('=== KIỂM TRA DỮ LIỆU ===');
+  
+  try {
+    const allData = {
+      User: getUserData(),
+      ChamCong: getChamCongData(), 
+      GiaoDichLuong: getGiaoDichLuongData(),
+      LichSuLuong: getLichSuLuongData()
+    };
+    
+    console.log('Tổng quan dữ liệu:');
+    Object.keys(allData).forEach(sheetName => {
+      console.log(`- ${sheetName}: ${allData[sheetName].length} bản ghi`);
+      if (allData[sheetName].length > 0) {
+        console.log(`  Cột đầu tiên: ${Object.keys(allData[sheetName][0]).join(', ')}`);
+      }
+    });
+    
+    // Test thống kê
+    const stats = getOverallStats();
+    console.log('Thống kê tổng quan:', stats);
+    
+    return allData;
+    
+  } catch (error) {
+    console.error('Lỗi trong quá trình test:', error);
+    return null;
+  }
+}
+
+// === DEPLOYMENT INSTRUCTIONS ===
+/*
+HƯỚNG DẪN DEPLOY:
+
+1. Tạo Google Apps Script Project:
+   - Truy cập script.google.com
+   - Tạo project mới
+   - Copy toàn bộ code này vào Code.gs
+
+2. Cấu hình Google Sheet:
+   - Đảm bảo có 4 sheet: User, ChamCong, GiaoDichLuong, LichSuLuong
+   - Kiểm tra tên cột khớp với code
+
+3. Deploy Web App:
+   - Trong Apps Script: Deploy > New deployment
+   - Type: Web app
+   - Execute as: Me
+   - Who has access: Anyone (hoặc theo yêu cầu bảo mật)
+   - Deploy và copy URL
+
+4. Sử dụng trong HTML:
+   const SCRIPT_URL = 'URL_WEB_APP_CỦA_BẠN';
+   
+5. Test trước khi deploy:
+   - Chạy function testDataRetrieval() để kiểm tra
+
+LƯUÝ BẢO MẬT:
+- Đặt quyền truy cập phù hợp cho Web App
+- Có thể thêm authentication nếu cần
+- Kiểm tra dữ liệu sensitive trước khi deploy
+*/

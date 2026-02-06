@@ -1,0 +1,295 @@
+// --- CẤU HÌNH CHUNG ---
+var SPREADSHEET_ID = '1JSII6jKG1of1CsCYsn_75Va8dGLIYAsBd3JIIaP1Djc'; 
+
+// 1. HÀM KHỞI TẠO
+function doGet() {
+  var template = HtmlService.createTemplateFromFile('Index');
+  return template.evaluate()
+      .setTitle('Quản lý Kho & Nhân sự')
+      .setSandboxMode(HtmlService.SandboxMode.IFRAME)
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+// 2. XỬ LÝ ĐĂNG NHẬP (Giữ nguyên)
+function loginUser(username, password) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName('User');
+    if (!sheet) return { error: 'Không tìm thấy sheet User' };
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      var row = data[i];
+      var deleteStatus = (row.length > 18) ? row[18] : 1; 
+      if (String(row[0]).trim().toUpperCase() == String(username).trim().toUpperCase() && 
+          String(row[8]).trim() == String(password).trim()) {
+         if (deleteStatus != 'deleted' && deleteStatus != 'Xóa') {
+            return { success: true, user: { id: row[0], name: row[1], role: row[9] } };
+         } else { return { error: 'Tài khoản đã bị khóa.' }; }
+      }
+    }
+    return { error: 'Sai ID hoặc mật khẩu' };
+  } catch (e) { return { error: 'Lỗi server: ' + e.toString() }; }
+}
+
+// 3. TẢI DỮ LIỆU (Batch Loading)
+function getAllData() {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    return {
+      status: 'success',
+      'User': getSheetData(ss, 'User'),
+      'Chamcong': getSheetData(ss, 'Chamcong'),
+      'LichSuLuong': getSheetData(ss, 'LichSuLuong'),
+      'GiaoDichLuong': getSheetData(ss, 'GiaoDichLuong'), // Đã thêm bảng này
+      'BangLuongThang': getSheetData(ss, 'BangLuongThang'),
+      'DS_kho': getSheetData(ss, 'DS_kho'),
+      'Vat_tu': getSheetData(ss, 'Vat_tu'),
+      'Nhomvattu': getSheetData(ss, 'Nhomvattu'),
+      'Tonkho': getSheetData(ss, 'Tonkho'),
+      'PhieuNhap': getSheetData(ss, 'PhieuNhap'),
+      'NhapChiTiet': getSheetData(ss, 'NhapChiTiet'), // Đã thêm bảng này
+      'PhieuXuat': getSheetData(ss, 'PhieuXuat'),
+      'XuatChiTiet': getSheetData(ss, 'XuatChiTiet'),
+      'Phieuchuyenkho': getSheetData(ss, 'Phieuchuyenkho'),
+      'BanGiaoCongCu': getSheetData(ss, 'BanGiaoCongCu'),
+      'Chiphi': getSheetData(ss, 'Chiphi'),
+      'Chiphichitiet': getSheetData(ss, 'Chiphichitiet'),
+      'Doitac': getSheetData(ss, 'Doitac'),
+      'Notes': getSheetData(ss, 'Notes')
+    };
+  } catch (e) { return { status: 'error', message: e.toString() }; }
+}
+
+// 4. CẤU HÌNH TÊN CỘT ID
+function getIdColumnName(sheetName) {
+  switch (sheetName) {
+    case 'User': return 'ID';
+    case 'Chamcong': return 'ID_ChamCong';
+    case 'LichSuLuong': return 'ID_LichSu';
+    case 'GiaoDichLuong': return 'ID_GiaoDich';
+    case 'PhieuNhap': return 'ID phieu nhap';
+    case 'NhapChiTiet': return 'ID nhap chi tiet';
+    case 'PhieuXuat': return 'ID phieu Xuat';
+    case 'XuatChiTiet': return 'ID xuat chi tiet';
+    case 'BanGiaoCongCu': return 'ID_BGCC';
+    case 'Phieuchuyenkho': return 'ID Chkho';
+    case 'DS_kho': return 'ID kho';
+    case 'Vat_tu': return 'ID vật tư';
+    case 'Tonkho': return 'ID_TonKho';
+    case 'Nhomvattu': return 'ID NVT';
+    case 'BangLuongThang': return 'ID_BangLuong';
+    case 'Chiphi': return 'ID_ChiPhi';
+    case 'Chiphichitiet': return 'ID_ChiTiet';
+    case 'Doitac': return 'ID đối tác';
+    case 'Notes': return 'ID_Note';
+    case 'LichNhac': return 'ID_Nhac';
+    case 'Luongphucap': return 'ID lương';
+    default: return 'ID';
+  }
+}
+
+// 5. HÀM LƯU DỮ LIỆU (CÓ SINH ID TỰ ĐỘNG)
+function saveData(sheetName, formData) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return { status: 'error', message: 'Không tìm thấy Sheet: ' + sheetName };
+
+    var idColumnName = getIdColumnName(sheetName);
+    var data = sheet.getDataRange().getDisplayValues();
+    var headers = data[0];
+    var idColIndex = headers.indexOf(idColumnName);
+    
+    if (idColIndex === -1) return { status: 'error', message: 'Không tìm thấy cột ID: ' + idColumnName };
+
+    var recordId = formData[idColumnName]; 
+    var rowIndex = -1;
+
+    // Tìm dòng để update
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][idColIndex]) === String(recordId)) {
+        rowIndex = i + 1; 
+        break;
+      }
+    }
+
+    var isCreate = (rowIndex === -1);
+    
+    // --- LOGIC SINH ID TỰ ĐỘNG (CHỈ KHI TẠO MỚI) ---
+    if (isCreate) {
+        var now = new Date();
+        
+        // 1. BẢNG USER: Tăng dần (CDX001, CDX002...)
+        if (sheetName === 'User') {
+             var maxId = 0;
+             for (var i = 1; i < data.length; i++) {
+                 var currId = String(data[i][idColIndex]);
+                 if (currId.startsWith('CDX')) {
+                     var num = parseInt(currId.substring(3));
+                     if (!isNaN(num) && num > maxId) maxId = num;
+                 }
+             }
+             var nextId = maxId + 1;
+             recordId = 'CDX' + String(nextId).padStart(3, '0');
+             formData[idColumnName] = recordId;
+        }
+        
+        // 2. BẢNG CHẤM CÔNG: Random ID + Mã hiển thị cấu trúc
+        else if (sheetName === 'Chamcong') {
+            recordId = generateRandomId(8); // e238e556
+            formData[idColumnName] = recordId;
+            
+            // Tạo Mahienthi: Chamcong-CDX034-20250625
+            var idNV = formData['ID_NhanVien'] || 'Unknown';
+            var dateStr = formatDate(formData['Ngày'], 'YYYYMMDD');
+            formData['Mahienthi'] = `Chamcong-${idNV}-${dateStr}`;
+        }
+        
+        // 3. BẢNG LỊCH SỬ LƯƠNG: LSLuong-yyyyMMdd-HHmmss
+        else if (sheetName === 'LichSuLuong') {
+            recordId = `LSLuong-${formatDate(now, 'YYYYMMDD')}-${formatDate(now, 'HHMMSS')}`;
+            formData[idColumnName] = recordId;
+        }
+        
+        // 4. BẢNG GIAO DỊCH LƯƠNG: Random ID + Mã giao dịch cấu trúc
+        else if (sheetName === 'GiaoDichLuong') {
+            recordId = generateRandomId(8);
+            formData[idColumnName] = recordId;
+            
+            // MaGiaoDich: GiaoDich-CDX034-20250627-205849
+            var idNV = formData['ID_NhanVien'] || 'Unknown';
+            formData['MaGiaoDich'] = `GiaoDich-${idNV}-${formatDate(now, 'YYYYMMDD')}-${formatDate(now, 'HHMMSS')}`;
+        }
+        
+        // 5. BẢNG PHIẾU NHẬP / XUẤT: CDX001-NK-250815 (User-Type-YYMMDD)
+        else if (sheetName === 'PhieuNhap' || sheetName === 'PhieuXuat') {
+            var type = (sheetName === 'PhieuNhap') ? 'NK' : 'XK';
+            var userCode = formData[sheetName === 'PhieuNhap' ? 'Người nhập' : 'Người xuất'] || 'ADMIN';
+            var dateShort = formatDate(formData['Ngày'], 'YYMMDD');
+            // Thêm đuôi random ngắn để tránh trùng nếu 1 ngày nhập nhiều phiếu
+            var suffix = Math.floor(Math.random() * 100).toString().padStart(2,'0'); 
+            
+            recordId = `${userCode}-${type}-${dateShort}${suffix}`; 
+            formData[idColumnName] = recordId;
+            
+            // Mặc định trạng thái ban đầu
+            if(!formData['Trangthai']) formData['Trangthai'] = 'Nháp';
+            if(!formData['Phê duyệt']) formData['Phê duyệt'] = 'Chưa phê duyệt';
+        }
+        
+        // 6. BẢNG CHI TIẾT (Nhập/Xuất/Chi phí): Random 8 ký tự
+        else if (['NhapChiTiet', 'XuatChiTiet', 'Chiphichitiet', 'BanGiaoCongCu'].includes(sheetName)) {
+            recordId = generateRandomId(8);
+            formData[idColumnName] = recordId;
+        }
+        
+        // CÁC BẢNG KHÁC: Nếu chưa có ID thì tạo Random
+        else if (!recordId) {
+             recordId = generateRandomId(8);
+             formData[idColumnName] = recordId;
+        }
+    }
+    // --- HẾT LOGIC SINH ID ---
+
+    var rowDataToSave = [];
+    if (!isCreate) { 
+      // UPDATE
+      for (var c = 0; c < headers.length; c++) {
+        var headerKey = headers[c].toString().trim();
+        if (formData.hasOwnProperty(headerKey)) {
+          rowDataToSave.push(formData[headerKey]);
+        } else {
+           rowDataToSave.push(data[rowIndex-1][c]);
+        }
+      }
+      sheet.getRange(rowIndex, 1, 1, rowDataToSave.length).setValues([rowDataToSave]);
+    } else {
+      // CREATE
+      for (var c = 0; c < headers.length; c++) {
+        var headerKey = headers[c].toString().trim();
+        rowDataToSave.push(formData.hasOwnProperty(headerKey) ? formData[headerKey] : "");
+      }
+      sheet.appendRow(rowDataToSave);
+    }
+
+    return { status: 'success', message: 'Lưu thành công!' };
+
+  } catch (e) {
+    return { status: 'error', message: e.toString() };
+  }
+}
+
+// 6. HÀM XÓA (Giữ nguyên)
+function deleteData(sheetName, id) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return { status: 'error', message: 'Không tìm thấy Sheet' };
+    var idColumnName = getIdColumnName(sheetName);
+    var data = sheet.getDataRange().getDisplayValues();
+    var headers = data[0];
+    var idColIndex = headers.indexOf(idColumnName);
+    if (idColIndex === -1) return { status: 'error', message: 'Không tìm thấy cột ID' };
+    for (var i = data.length - 1; i >= 1; i--) { 
+      if (String(data[i][idColIndex]) === String(id)) {
+        sheet.deleteRow(i + 1); 
+        return { status: 'success', message: 'Đã xóa thành công!' };
+      }
+    }
+    return { status: 'error', message: 'Không tìm thấy ID để xóa' };
+  } catch (e) { return { status: 'error', message: e.toString() }; }
+}
+
+// 7. HELPER FUNCTIONS
+function getSheetData(ss, sheetName) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getDisplayValues();
+  if (data.length < 2) return [];
+  var headers = data[0];
+  var result = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var obj = {};
+    for (var j = 0; j < headers.length; j++) {
+      var headerName = headers[j].toString().trim();
+      obj[headerName] = row[j];
+    }
+    result.push(obj);
+  }
+  return result;
+}
+
+// Tạo chuỗi ngẫu nhiên (Hex/Number)
+function generateRandomId(length) {
+    var result = '';
+    var characters = 'abcdef0123456789'; // Hex style like e238e556
+    if (!length) length = 8;
+    for (var i = 0; i < length; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return result;
+}
+
+// Format ngày tháng chuẩn YYYYMMDD hoặc HHMMSS
+function formatDate(dateInput, format) {
+    var d = new Date(dateInput);
+    if (isNaN(d.getTime())) d = new Date(); // Nếu date invalid thì lấy hiện tại
+    
+    var year = d.getFullYear();
+    var month = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    var hour = ('0' + d.getHours()).slice(-2);
+    var min = ('0' + d.getMinutes()).slice(-2);
+    var sec = ('0' + d.getSeconds()).slice(-2);
+    
+    if (format === 'YYYYMMDD') return year + month + day;
+    if (format === 'YYMMDD') return String(year).slice(-2) + month + day;
+    if (format === 'HHMMSS') return hour + min + sec;
+    return d.toISOString();
+}
