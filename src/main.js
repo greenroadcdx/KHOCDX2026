@@ -562,11 +562,11 @@ function renderTable(data) {
                 <div class="row g-2 align-items-end">
                     <div class="col-md-2">
                         <label class="form-label small fw-bold text-muted mb-1">Từ ngày</label>
-                        <input type="date" id="filter-from" class="form-control" onchange="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])">
+                        <input type="date" id="filter-from" class="form-control" oninput="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])" onchange="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small fw-bold text-muted mb-1">Đến ngày</label>
-                        <input type="date" id="filter-to" class="form-control" onchange="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])">
+                        <input type="date" id="filter-to" class="form-control" oninput="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])" onchange="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small fw-bold text-muted mb-1">Kho</label>

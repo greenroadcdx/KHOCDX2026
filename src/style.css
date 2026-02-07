@@ -13,7 +13,8 @@ body {
     color: var(--text-dark);
     font-size: 12px !important;
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: auto !important;
+    /* Force body scroll */
 }
 
 h1,
@@ -124,16 +125,17 @@ h6,
         margin-left: var(--sidebar-width) !important;
         padding: 15px;
         margin-top: var(--navbar-height);
-        height: calc(100vh - var(--navbar-height));
-        overflow-y: auto;
-        /* Cho phép cuộn dọc chính */
+        min-height: calc(100vh - var(--navbar-height));
+        /* height: calc(100vh - var(--navbar-height)); Removed to allow body scroll */
+        /* overflow-y: auto; Removed inner scroll */
         display: flex;
         flex-direction: column;
     }
 
     .table-responsive {
         flex: 1;
-        overflow-y: auto;
+        overflow: visible;
+        /* Allow table to expand */
         border-radius: 8px;
         border: 1px solid #eee;
         background: white;
