@@ -139,6 +139,7 @@ const COLUMN_MAP = {
     'Ghi chú chi tiết': 'Ghi chú chi tiết',
 
     // Vật tư
+    'ID vật tư': 'Mã vật tư',
     'Nhóm vật tư': 'Nhóm vật tư',
     'Quy cách': 'Quy cách/Kích thước',
     'Tồn kho': 'Tồn kho hiện tại',
@@ -149,8 +150,71 @@ const COLUMN_MAP = {
     'Tên chi phí': 'Tên chi phí',
     'Số tiền': 'Số tiền chi',
     'Hạng mục': 'Hạng mục chi',
-    'Who delete': 'Người xóa'
+    'Who delete': 'Người xóa',
+
+    // Nhân sự / User
+    'Phân quyền': 'Phân quyền',
+    'App_pass': 'Mật khẩu ứng dụng',
+    'Ngày sinh': 'Ngày sinh',
+    'CCCD': 'Căn cước công dân',
+    'Ngày vào làm': 'Ngày vào làm',
+    'Lương cơ bản': 'Lương cơ bản',
+    'Phụ cấp': 'Phụ cấp',
+    'Hình ảnh': 'Hình ảnh',
+
+    // Chấm công
+    'ID_ChamCong': 'Mã chấm công',
+    'Tháng': 'Tháng',
+    'Năm': 'Năm',
+    'Ngày công': 'Ngày công',
+    'Số công': 'Số công',
+    'Ngày nghỉ': 'Ngày nghỉ',
+    'Ghi chú chấm công': 'Ghi chú chấm công',
+
+    // Giao dịch lương / Tạm ứng
+    'ID_GiaoDich': 'Mã giao dịch',
+    'Loại giao dịch': 'Loại giao dịch',
+    'Số tiền': 'Số tiền',
+    'Ngày giao dịch': 'Ngày giao dịch',
+    'Mô tả': 'Mô tả',
+    'Nhân viên': 'Nhân viên',
+
+    // Bảng lương tháng
+    'ID_BangLuong': 'Mã bảng lương',
+    'Tổng lương': 'Tổng lương',
+    'Thực lĩnh': 'Thực lĩnh',
+    'Khấu trừ': 'Khấu trừ',
+    'Thưởng': 'Thưởng',
+
+    // Đối tác / NCC
+    'ID đối tác': 'Mã đối tác',
+    'Tên đối tác': 'Tên đối tác',
+    'Loại đối tác': 'Loại đối tác',
+    'Người liên hệ': 'Người liên hệ',
+    'Website': 'Website',
+
+    // Kho
+    'ID kho': 'Mã kho',
+    'Địa điểm': 'Địa điểm',
+    'Quản lý kho': 'Quản lý kho',
+
+    // Tồn kho
+    'ID_TonKho': 'Mã tồn kho',
+    'Số lượng tồn': 'Số lượng tồn',
+
+    // Chuyển kho chi tiết
+    'ID CKchitiet': 'Mã chi tiết chuyển',
+    'Kho nguồn': 'Kho nguồn',
+    'Kho đích': 'Kho đích',
+
+    // Nhóm vật tư
+    'ID NVT': 'Mã nhóm vật tư',
+    'Tên nhóm': 'Tên nhóm',
+
+    // Chi phí chi tiết
+    'ID_ChiTiet': 'Mã chi tiết chi phí'
 };
+
 
 const RELATION_CONFIG = {
     'Phieunhap': { child: 'NhapChiTiet', foreignKey: 'ID phieu nhap', title: 'CHI TIẾT NHẬP' },
@@ -622,16 +686,13 @@ function renderTable(data) {
         var tdA = document.createElement('td'); tdA.className = 'text-center sticky-col';
         var btnGroup = document.createElement('div'); btnGroup.className = 'btn-group';
 
-        var btnView = document.createElement('button'); btnView.className = 'btn btn-sm btn-light border text-primary shadow-sm'; btnView.innerHTML = '<i class="fas fa-eye"></i>'; btnView.title = 'Xem';
-        btnView.onclick = (e) => { e.stopPropagation(); showRowDetail(r, CURRENT_SHEET, absoluteIdx); };
-
         var btnEdit = document.createElement('button'); btnEdit.className = 'btn btn-sm btn-light border text-success shadow-sm'; btnEdit.innerHTML = '<i class="fas fa-pen"></i>'; btnEdit.title = 'Sửa';
         btnEdit.onclick = (e) => { e.stopPropagation(); openEditModal(absoluteIdx); };
 
         var btnDel = document.createElement('button'); btnDel.className = 'btn btn-sm btn-light border text-danger shadow-sm'; btnDel.innerHTML = '<i class="fas fa-trash-alt"></i>'; btnDel.title = 'Xóa';
         btnDel.onclick = (e) => { e.stopPropagation(); deleteRow(absoluteIdx); };
 
-        btnGroup.appendChild(btnView); btnGroup.appendChild(btnEdit); btnGroup.appendChild(btnDel);
+        btnGroup.appendChild(btnEdit); btnGroup.appendChild(btnDel);
         tdA.appendChild(btnGroup); tr.appendChild(tdA);
 
         tr.onclick = () => showRowDetail(r, CURRENT_SHEET, absoluteIdx);
