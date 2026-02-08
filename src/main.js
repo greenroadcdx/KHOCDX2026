@@ -2163,65 +2163,150 @@ window.openQuickExpenseForm = function () {
         var val = item['label'] || item['Label'] || item['id'] || item['ID'] || '';
         loaiOptions += '<option value="' + String(val).replace(/"/g, '&quot;') + '">' + String(val).replace(/</g, '&lt;') + '</option>';
     });
-
-    // Nếu Drop chưa load hoặc rỗng, thêm vài option mặc định
     if (dropData.length === 0) {
-        loaiOptions += '<option value="Vật tư">Vật tư</option>';
-        loaiOptions += '<option value="Xăng dầu">Xăng dầu</option>';
-        loaiOptions += '<option value="Ăn uống">Ăn uống</option>';
-        loaiOptions += '<option value="Vận chuyển">Vận chuyển</option>';
-        loaiOptions += '<option value="Khác">Khác</option>';
+        ['Vật tư', 'Xăng dầu', 'Ăn uống', 'Vận chuyển', 'Khác'].forEach(function (v) {
+            loaiOptions += '<option value="' + v + '">' + v + '</option>';
+        });
     }
+
+    // Dropdown Đơn vị tính từ bảng Drop
+    var dvtData = (GLOBAL_DATA['Drop'] || []).filter(function (r) {
+        var cond = String(r['condition'] || r['Condition'] || '').toLowerCase().trim();
+        return (cond === 'đơn vị tính' || cond === 'don vi tinh' || cond === 'dvt') && r['Delete'] !== 'X';
+    });
+    var dvtOptions = '<option value="">-- Chọn --</option>';
+    dvtData.forEach(function (item) {
+        var val = item['label'] || item['Label'] || item['id'] || item['ID'] || '';
+        dvtOptions += '<option value="' + String(val).replace(/"/g, '&quot;') + '">' + String(val).replace(/</g, '&lt;') + '</option>';
+    });
+    if (dvtData.length === 0) {
+        ['Cái', 'Bộ', 'Kg', 'Lít', 'M', 'Thùng', 'Chuyến', 'Lần'].forEach(function (v) {
+            dvtOptions += '<option value="' + v + '">' + v + '</option>';
+        });
+    }
+
+    // Dropdown Vật tư từ bảng Vat_tu
+    var vattuData = (GLOBAL_DATA['Vat_tu'] || GLOBAL_DATA['VatLieu'] || []).filter(function (r) { return r['Delete'] !== 'X'; });
+    var vattuOptions = '<option value="">-- Không chọn --</option>';
+    vattuData.forEach(function (item) {
+        var id = item['ID vật tư'] || item['Id_vat_tu'] || item['MaVatTu'] || '';
+        var ten = item['Tên vật tư'] || item['Ten_vat_tu'] || '';
+        if (id) vattuOptions += '<option value="' + String(id).replace(/"/g, '&quot;') + '">' + id + ' - ' + String(ten).replace(/</g, '&lt;') + '</option>';
+    });
+
+    // Dropdown Kho từ bảng DS_kho
+    var khoData = (GLOBAL_DATA['DS_kho'] || []).filter(function (r) { return r['Delete'] !== 'X'; });
+    var khoOptions = '<option value="">-- Không chọn --</option>';
+    khoData.forEach(function (item) {
+        var id = item['ID kho'] || item['ID_kho'] || '';
+        var ten = item['Tên kho'] || item['Ten_kho'] || '';
+        if (id || ten) khoOptions += '<option value="' + String(id || ten).replace(/"/g, '&quot;') + '">' + String(ten || id).replace(/</g, '&lt;') + '</option>';
+    });
 
     var today = new Date().toISOString().split('T')[0];
     var userName = CURRENT_USER ? (CURRENT_USER.name || CURRENT_USER['Họ và tên'] || '') : '';
 
     var html = '<div style="text-align: left;">'
         + '<div class="alert alert-info py-2 mb-3" style="font-size:12px;">'
-        + '<i class="fas fa-info-circle me-1"></i> Hệ thống sẽ tự động tạo/gom phiếu chi phí theo <b>ngày + người lập</b>.'
+        + '<i class="fas fa-info-circle me-1"></i> Hệ thống tự động tạo/gom phiếu theo <b>ngày + người lập</b>. Thành tiền = SL × Đơn giá.'
         + '</div>'
-        + '<div class="mb-3">'
-        + '  <label class="form-label fw-bold">Ngày chi <span class="text-danger">*</span></label>'
-        + '  <input type="date" id="qe-date" class="form-control" value="' + today + '">'
+        + '<div class="row g-2">'
+        // Hàng 1: Ngày chi + Người lập
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Ngày chi <span class="text-danger">*</span></label>'
+        + '  <input type="date" id="qe-date" class="form-control form-control-sm" value="' + today + '">'
         + '</div>'
-        + '<div class="mb-3">'
-        + '  <label class="form-label fw-bold">Người lập</label>'
-        + '  <input type="text" class="form-control bg-light" value="' + userName + '" disabled>'
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Người lập</label>'
+        + '  <input type="text" class="form-control form-control-sm bg-light" value="' + userName + '" disabled>'
         + '</div>'
-        + '<div class="mb-3">'
-        + '  <label class="form-label fw-bold">Loại chi phí <span class="text-danger">*</span></label>'
-        + '  <select id="qe-loai" class="form-select">' + loaiOptions + '</select>'
+        // Hàng 2: Loại chi phí + Nội dung
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Loại chi phí <span class="text-danger">*</span></label>'
+        + '  <select id="qe-loai" class="form-select form-select-sm">' + loaiOptions + '</select>'
         + '</div>'
-        + '<div class="mb-3">'
-        + '  <label class="form-label fw-bold">Số tiền (VNĐ) <span class="text-danger">*</span></label>'
-        + '  <input type="number" id="qe-sotien" class="form-control" placeholder="Nhập số tiền..." min="0">'
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Nội dung</label>'
+        + '  <input type="text" id="qe-noidung" class="form-control form-control-sm" placeholder="Mô tả khoản chi...">'
         + '</div>'
-        + '<div class="mb-3">'
-        + '  <label class="form-label fw-bold">Ghi chú</label>'
-        + '  <textarea id="qe-ghichu" class="form-control" rows="2" placeholder="Mô tả chi tiết khoản chi..."></textarea>'
+        // Hàng 3: Vật tư + Kho
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Vật tư <span class="text-muted">(nếu có)</span></label>'
+        + '  <select id="qe-vattu" class="form-select form-select-sm">' + vattuOptions + '</select>'
         + '</div>'
-        + '</div>';
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Kho <span class="text-muted">(nếu có)</span></label>'
+        + '  <select id="qe-kho" class="form-select form-select-sm">' + khoOptions + '</select>'
+        + '</div>'
+        // Hàng 4: Số lượng + ĐVT + Đơn giá
+        + '<div class="col-4">'
+        + '  <label class="form-label fw-bold small mb-1">Số lượng</label>'
+        + '  <input type="number" id="qe-soluong" class="form-control form-control-sm" placeholder="0" min="0" step="any">'
+        + '</div>'
+        + '<div class="col-4">'
+        + '  <label class="form-label fw-bold small mb-1">ĐVT</label>'
+        + '  <select id="qe-dvt" class="form-select form-select-sm">' + dvtOptions + '</select>'
+        + '</div>'
+        + '<div class="col-4">'
+        + '  <label class="form-label fw-bold small mb-1">Đơn giá</label>'
+        + '  <input type="number" id="qe-dongia" class="form-control form-control-sm" placeholder="0" min="0">'
+        + '</div>'
+        // Hàng 5: Thành tiền (auto)
+        + '<div class="col-12">'
+        + '  <label class="form-label fw-bold small mb-1">Thành tiền (VNĐ) <span class="text-danger">*</span></label>'
+        + '  <input type="number" id="qe-sotien" class="form-control form-control-sm fw-bold text-success" placeholder="Nhập hoặc tự tính = SL × Đơn giá" min="0">'
+        + '</div>'
+        // Hàng 6: Ghi chú
+        + '<div class="col-12">'
+        + '  <label class="form-label fw-bold small mb-1">Ghi chú</label>'
+        + '  <textarea id="qe-ghichu" class="form-control form-control-sm" rows="2" placeholder="Ghi chú thêm..."></textarea>'
+        + '</div>'
+        + '</div></div>';
 
     Swal.fire({
-        title: '<i class="fas fa-coins me-2 text-success"></i>Nhập chi phí nhanh',
+        title: '<i class="fas fa-coins me-2 text-success"></i>Nhập chi phí',
         html: html,
-        width: '500px',
+        width: '620px',
         showCancelButton: true,
         confirmButtonText: '<i class="fas fa-save me-1"></i> Lưu chi phí',
         cancelButtonText: 'Hủy',
         confirmButtonColor: '#2E7D32',
         customClass: { popup: 'rounded-4 shadow-lg' },
+        didOpen: function () {
+            // Auto-tính thành tiền khi nhập SL hoặc Đơn giá
+            var slEl = document.getElementById('qe-soluong');
+            var dgEl = document.getElementById('qe-dongia');
+            var ttEl = document.getElementById('qe-sotien');
+            function calcTotal() {
+                var sl = parseFloat(slEl.value) || 0;
+                var dg = parseFloat(dgEl.value) || 0;
+                if (sl > 0 && dg > 0) ttEl.value = Math.round(sl * dg);
+            }
+            slEl.addEventListener('input', calcTotal);
+            dgEl.addEventListener('input', calcTotal);
+        },
         preConfirm: function () {
             var date = document.getElementById('qe-date').value;
             var loai = document.getElementById('qe-loai').value;
+            var noidung = document.getElementById('qe-noidung').value;
+            var vattu = document.getElementById('qe-vattu').value;
+            var kho = document.getElementById('qe-kho').value;
+            var soluong = document.getElementById('qe-soluong').value;
+            var dvt = document.getElementById('qe-dvt').value;
+            var dongia = document.getElementById('qe-dongia').value;
             var sotien = document.getElementById('qe-sotien').value;
             var ghichu = document.getElementById('qe-ghichu').value;
 
             if (!date) { Swal.showValidationMessage('Vui lòng chọn ngày chi'); return false; }
             if (!loai) { Swal.showValidationMessage('Vui lòng chọn loại chi phí'); return false; }
-            if (!sotien || isNaN(sotien) || Number(sotien) <= 0) { Swal.showValidationMessage('Vui lòng nhập số tiền hợp lệ (> 0)'); return false; }
+            if (!sotien || isNaN(sotien) || Number(sotien) <= 0) { Swal.showValidationMessage('Vui lòng nhập thành tiền hợp lệ (> 0)'); return false; }
 
-            return { date: date, loai: loai, sotien: Number(sotien), ghichu: ghichu || '' };
+            return {
+                date: date, loai: loai, noidung: noidung || '',
+                vattu: vattu || '', kho: kho || '',
+                soluong: soluong ? Number(soluong) : '', dvt: dvt || '', dongia: dongia ? Number(dongia) : '',
+                sotien: Number(sotien), ghichu: ghichu || ''
+            };
         }
     }).then(function (result) {
         if (result.isConfirmed) {
@@ -2276,6 +2361,12 @@ async function submitQuickExpense(params) {
             'GhiChu': params.ghichu,
             'NguoiLap': userId
         };
+        if (params.noidung) childData['NoiDung'] = params.noidung;
+        if (params.vattu) childData['MaVatTu'] = params.vattu;
+        if (params.kho) childData['Ten_kho'] = params.kho;
+        if (params.soluong) childData['SoLuong'] = params.soluong;
+        if (params.dvt) childData['DonViTinh'] = params.dvt;
+        if (params.dongia) childData['DonGia'] = params.dongia;
         var childResult = await callSupabase('insert', 'Chiphichitiet', childData);
         if (childResult.status !== 'success') {
             throw new Error(childResult.message || 'Lỗi khi lưu chi tiết chi phí');
@@ -2303,10 +2394,12 @@ async function submitQuickExpense(params) {
         Swal.fire({
             icon: 'success',
             title: 'Đã lưu thành công!',
-            html: '<div style="font-size:13px;">'
+            html: '<div style="font-size:13px; text-align:left;">'
                 + '<p>Phiếu: <b>' + parentId + '</b></p>'
-                + '<p>Khoản chi: <b>' + params.loai + '</b> — <span class="text-success fw-bold">' + params.sotien.toLocaleString('vi-VN') + ' đ</span></p>'
-                + '<p>Tổng phiếu ngày này: <span class="text-danger fw-bold">' + tongTien.toLocaleString('vi-VN') + ' đ</span></p>'
+                + '<p>Loại: <b>' + params.loai + '</b>' + (params.noidung ? ' — ' + params.noidung : '') + '</p>'
+                + (params.soluong ? '<p>SL: ' + params.soluong + (params.dvt ? ' ' + params.dvt : '') + (params.dongia ? ' × ' + Number(params.dongia).toLocaleString('vi-VN') + 'đ' : '') + '</p>' : '')
+                + '<p>Thành tiền: <span class="text-success fw-bold">' + params.sotien.toLocaleString('vi-VN') + ' đ</span></p>'
+                + '<hr class="my-2"><p>Tổng phiếu ngày này: <span class="text-danger fw-bold fs-5">' + tongTien.toLocaleString('vi-VN') + ' đ</span></p>'
                 + '</div>',
             confirmButtonText: '<i class="fas fa-plus me-1"></i> Nhập tiếp',
             showCancelButton: true,
