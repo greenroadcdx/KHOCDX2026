@@ -69,7 +69,8 @@ const MENU_STRUCTURE = [
             { id: 'chamcong', sheet: 'Chamcong', icon: 'fas fa-calendar-check', title: 'Bảng Chấm công' },
             { id: 'tamung', sheet: 'GiaoDichLuong', icon: 'fas fa-hand-holding-usd', title: 'Tạm ứng / PC' },
             { id: 'bangluong', sheet: 'BangLuongThang', icon: 'fas fa-money-check-alt', title: 'Bảng Lương tháng' },
-            { id: 'nhansu', sheet: 'User', icon: 'fas fa-users', title: 'Hồ sơ Nhân sự' }
+            { id: 'nhansu', sheet: 'User', icon: 'fas fa-users', title: 'Hồ sơ Nhân sự' },
+            { id: 'lichsuluong', sheet: 'LichSuLuong', icon: 'fas fa-cogs', title: 'Cài đặt lương' }
         ]
     },
     {
@@ -313,7 +314,8 @@ const DROPDOWN_CONFIG = {
         'ID NVT': { table: 'Nhomvattu', labelKey: 'Tên nhóm', valueKey: 'ID NVT' },
         'Nhóm vật tư': { table: 'Nhomvattu', labelKey: 'Tên nhóm', valueKey: 'ID NVT' },
         'ID đối tác': { table: 'Doitac', labelKey: 'Tên đối tác', valueKey: 'ID đối tác' },
-        'Tên đối tác': { table: 'Doitac', labelKey: 'Tên đối tác', valueKey: 'ID đối tác' }
+        'Tên đối tác': { table: 'Doitac', labelKey: 'Tên đối tác', valueKey: 'ID đối tác' },
+        'ID_NhanVien': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' }
     },
     'NhapChiTiet': { 'ID vật tư': { table: 'Vat_tu', labelKey: 'Tên vật tư', valueKey: 'ID vật tư' } },
     'XuatChiTiet': { 'ID vật tư': { table: 'Vat_tu', labelKey: 'Tên vật tư', valueKey: 'ID vật tư' } },
@@ -330,6 +332,18 @@ const DROPDOWN_CONFIG = {
     'Phieuchuyenkho': { 'KhoDi': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' }, 'KhoDen': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' }, 'NguoiChuyen': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' }, 'NguoiNhan': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' } },
     'Chuyenkhochitiet': { 'Kho nguồn': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' }, 'Kho đích': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' } },
     'Vat_tu': { 'Nhóm vật tư': { table: 'Nhomvattu', labelKey: 'Tên nhóm', valueKey: 'ID NVT' } }
+};
+
+// Kiểm tra cột tiền tệ để format phân tách hàng ngàn
+function isMoneyField(k) {
+    if (/^ID|GiaoDich|HeSo/i.test(k)) return false;
+    return /tien|tiền|luong|lương|don.?gia|dongia|đơn giá|giatri|giá trị|thanh.?tien|thành tiền|thuclanh|thực lãnh|thuc.?linh|phucap|phụ cấp|thuong|thưởng|thunhap|thu nhập|tamung|tạm ứng|baohiem|bảo hiểm|giamtru|giảm trừ|ngansach|ngân sách|sodu|số dư|tổng tiền|phatsinh|phát sinh/i.test(k);
+}
+
+// Ràng buộc input cho các trường đặc biệt
+const FIELD_CONSTRAINTS = {
+    'HeSoTangCa': { type: 'number', min: 1.1, max: 1.9, step: 0.1, placeholder: 'Từ 1.1 đến 1.9' },
+    'LuongCoBan_Ngay': { type: 'number', min: 0, step: 1000, placeholder: 'VNĐ / ngày' }
 };
 
 function getDropdownForField(sheet, fieldName) {
@@ -729,6 +743,27 @@ window.switchTab = function (id, el) {
         }
     }
     if (window.innerWidth < 992 && sidebarBS) sidebarBS.hide();
+}
+
+// --- MỞ CÀI ĐẶT LƯƠNG CHO NHÂN VIÊN ---
+window.openSalaryForEmployee = function (empId, empName) {
+    CURRENT_SHEET = 'LichSuLuong';
+    var allData = GLOBAL_DATA['LichSuLuong'] || [];
+    var record = allData.find(r => String(r['ID_NhanVien']) === String(empId));
+    if (record) {
+        var idx = allData.indexOf(record);
+        EDIT_INDEX = idx;
+        document.getElementById('modalTitle').innerText = 'Cài đặt lương - ' + empName;
+        buildForm('LichSuLuong', record);
+        new bootstrap.Modal(document.getElementById('dataModal')).show();
+    } else {
+        EDIT_INDEX = -1;
+        document.getElementById('modalTitle').innerText = 'Cài đặt lương - ' + empName;
+        buildForm('LichSuLuong', null);
+        new bootstrap.Modal(document.getElementById('dataModal')).show();
+        var sel = document.querySelector('#dynamic-form [name="ID_NhanVien"]');
+        if (sel) sel.value = empId;
+    }
 }
 
 // --- RENDER BẢNG CHẤM CÔNG DẠNG PIVOT ---
@@ -1584,10 +1619,10 @@ function renderTable(data) {
                 // Resolve foreign key trước tiên
                 v = resolveForeignKey(k, v);
 
-                if (k.toUpperCase().includes('NGAY') || k.toUpperCase().includes('DATE')) v = formatSafeDate(v);
+                if (!FIELD_CONSTRAINTS[k] && (k.toUpperCase().includes('NGAY') || k.toUpperCase().includes('DATE'))) v = formatSafeDate(v);
                 if (isImageColumnKey(k) && typeof v === 'string' && v.trim() && (v.startsWith('http://') || v.startsWith('https://'))) {
                     td.innerHTML = '<img src="' + String(v).replace(/"/g, '&quot;') + '" class="table-cell-img" alt="" style="max-height:36px;max-width:48px;object-fit:cover;border-radius:4px;">';
-                } else if ((k.toUpperCase().includes('GIA') || k.toUpperCase().includes('TIEN')) && !isNaN(v) && v !== '') {
+                } else if (isMoneyField(k) && !isNaN(v) && v !== '' && v != null) {
                     v = Number(v).toLocaleString('vi-VN'); td.className = 'text-end fw-bold text-success'; td.innerText = v;
                 } else {
                     td.innerText = v || '';
@@ -1684,7 +1719,7 @@ function buildForm(s, d) {
     Object.keys(smp).forEach(k => {
         if (skip.includes(k)) return;
         var v = d ? (d[k] != null ? d[k] : '') : '';
-        if (d && (k.includes('Ngay') || k.includes('Date'))) {
+        if (d && !FIELD_CONSTRAINTS[k] && (k.includes('Ngay') || k.includes('Date'))) {
             try { v = new Date(v).toISOString().split('T')[0]; } catch (e) { v = ''; }
         }
         var div = document.createElement('div');
@@ -1743,7 +1778,18 @@ function buildForm(s, d) {
 
             div.innerHTML = '<label class="form-label small fw-bold text-muted">' + (COLUMN_MAP[k] || k) + '</label><select class="form-select rounded-3" name="' + k + '">' + optionsHtml + '</select>';
         } else {
-            div.innerHTML = '<label class="form-label small fw-bold text-muted">' + (COLUMN_MAP[k] || k) + '</label><input class="form-control rounded-3" name="' + k + '" value="' + String(v).replace(/"/g, '&quot;') + '" ' + (k.includes('Ngay') ? 'type="date"' : '') + '>';
+            var fc = FIELD_CONSTRAINTS[k];
+            var inputAttrs = 'name="' + k + '" value="' + String(v).replace(/"/g, '&quot;') + '"';
+            if (fc) {
+                inputAttrs += ' type="' + fc.type + '"';
+                if (fc.min != null) inputAttrs += ' min="' + fc.min + '"';
+                if (fc.max != null) inputAttrs += ' max="' + fc.max + '"';
+                if (fc.step != null) inputAttrs += ' step="' + fc.step + '"';
+                if (fc.placeholder) inputAttrs += ' placeholder="' + fc.placeholder + '"';
+            } else if (k.includes('Ngay')) {
+                inputAttrs += ' type="date"';
+            }
+            div.innerHTML = '<label class="form-label small fw-bold text-muted">' + (COLUMN_MAP[k] || k) + '</label><input class="form-control rounded-3" ' + inputAttrs + '>';
         }
         f.appendChild(div);
     });
@@ -1973,7 +2019,7 @@ function showRowDetail(r, s, idx) {
             // Resolve foreign key trước tiên
             var resolvedVal = resolveForeignKey(k, val);
 
-            if (k.toUpperCase().includes('NGAY') || k.toUpperCase().includes('DATE')) resolvedVal = formatSafeDate(resolvedVal);
+            if (!FIELD_CONSTRAINTS[k] && (k.toUpperCase().includes('NGAY') || k.toUpperCase().includes('DATE'))) resolvedVal = formatSafeDate(resolvedVal);
 
             var displayVal = resolvedVal;
             if (typeof val === 'string' && (val.startsWith('http') || val.startsWith('https'))) {
@@ -1982,11 +2028,11 @@ function showRowDetail(r, s, idx) {
                 } else {
                     displayVal = `<a href="${val.replace(/"/g, '&quot;')}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2 mt-1" style="font-size:10px">Mở tài liệu <i class="fas fa-external-link-alt ms-1"></i></a>`;
                 }
-            } else if (!isNaN(resolvedVal) && resolvedVal !== '' && (k.toLowerCase().includes('tiền') || k.toLowerCase().includes('giá') || k.toLowerCase().includes('thành') || k.toLowerCase().includes('số tiền') || k.toLowerCase().includes('tong'))) {
+            } else if (isMoneyField(k) && !isNaN(resolvedVal) && resolvedVal !== '' && resolvedVal != null) {
                 displayVal = `<span class="text-success fw-bold text-end">${Number(resolvedVal).toLocaleString('vi-VN')}</span>`;
             }
 
-            var isNumField = typeof resolvedVal === 'number' || (typeof resolvedVal === 'string' && resolvedVal !== '' && !isNaN(resolvedVal) && (k.toLowerCase().includes('tiền') || k.toLowerCase().includes('giá') || k.toLowerCase().includes('thành') || k.toLowerCase().includes('số') || k.toLowerCase().includes('tong')));
+            var isNumField = isMoneyField(k) && !isNaN(resolvedVal) && resolvedVal !== '';
             html += `<div class="col-md-4 col-6 mb-3 border-bottom pb-2 detail-field">
                 <small class="field-label">${COLUMN_MAP[k] || k}</small>
                 <span class="field-value ${isNumField ? 'text-end' : ''}">${displayVal}</span>
@@ -2020,8 +2066,7 @@ function showRowDetail(r, s, idx) {
             var ck = Object.keys(childs[0]);
             ck.forEach(x => {
                 if (!skip.includes(x) && x != fk) {
-                    var isNumCol = /tiền|giá|thành|số lượng|so_luong|so_luong|don_gia|dongia|so_tien|sotien/i.test(x);
-                    html += '<th class="' + (isNumCol ? 'text-end' : 'text-start') + '">' + (COLUMN_MAP[x] || x) + '</th>';
+                    html += '<th class="' + (isMoneyField(x) ? 'text-end' : 'text-start') + '">' + (COLUMN_MAP[x] || x) + '</th>';
                 }
             });
             html += '<th class="text-center" style="min-width: 100px;">Thao tác</th>';
@@ -2036,7 +2081,7 @@ function showRowDetail(r, s, idx) {
                         // Apply FK mapping to child table cells
                         cv = resolveForeignKey(x, cv);
 
-                        var isNumCol = /tiền|giá|thành|số lượng|so_luong|don_gia|dongia|so_tien|sotien/i.test(x);
+                        var isNumCol = isMoneyField(x);
                         var tdClass = isNumCol ? ' text-end' : ' text-start';
                         if (isImageColumnKey(x) && typeof cv === 'string' && cv.trim() && (cv.startsWith('http') || cv.startsWith('https'))) {
                             cv = `<img src="${String(cv).replace(/"/g, '&quot;')}" class="table-cell-img" alt="" style="max-height:28px;max-width:36px;object-fit:cover;border-radius:4px;">`;
@@ -2085,6 +2130,9 @@ function showRowDetail(r, s, idx) {
                             <i class="fas fa-trash-alt me-2"></i> Xóa
                         </button>
                         <div class="d-flex gap-2">
+                            ${s === 'User' ? `<button type="button" class="btn btn-info text-white px-4 shadow-sm rounded-3" onclick="Swal.close(); setTimeout(() => openSalaryForEmployee('${r['ID']}', '${(r['Họ và tên'] || r['ID']).replace(/'/g, "\\'")}'), 200);" style="min-width: 100px;">
+                                <i class="fas fa-cogs me-2"></i> Cài đặt lương
+                            </button>` : ''}
                             <button type="button" class="btn btn-warning text-dark px-4 shadow-sm rounded-3" onclick="Swal.close(); setTimeout(() => openEditModal(${idx}, '${s}'), 200);" style="min-width: 100px;">
                                 <i class="fas fa-edit me-2"></i> Sửa
                             </button>
