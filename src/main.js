@@ -2185,13 +2185,13 @@ window.openQuickExpenseForm = function () {
         });
     }
 
-    // Dropdown Vật tư từ bảng Vat_tu
+    // Dropdown Vật tư từ bảng Vat_tu - hiển thị Tên, lưu ID
     var vattuData = (GLOBAL_DATA['Vat_tu'] || GLOBAL_DATA['VatLieu'] || []).filter(function (r) { return r['Delete'] !== 'X'; });
     var vattuOptions = '<option value="">-- Không chọn --</option>';
     vattuData.forEach(function (item) {
-        var id = item['ID vật tư'] || item['Id_vat_tu'] || item['MaVatTu'] || '';
-        var ten = item['Tên vật tư'] || item['Ten_vat_tu'] || '';
-        if (id) vattuOptions += '<option value="' + String(id).replace(/"/g, '&quot;') + '">' + id + ' - ' + String(ten).replace(/</g, '&lt;') + '</option>';
+        var id = item['ID vật tư'] || item['Id_vat_tu'] || item['MaVatTu'] || item['id_vat_tu'] || '';
+        var ten = item['Tên vật tư'] || item['Ten_vat_tu'] || item['ten_vat_tu'] || '';
+        if (id) vattuOptions += '<option value="' + String(id).replace(/"/g, '&quot;') + '" data-ten="' + String(ten).replace(/"/g, '&quot;') + '" data-dvt="' + String(item['Đơn vị tính'] || item['DonViTinh'] || item['DVT'] || item['Don_vi_tinh'] || '').replace(/"/g, '&quot;') + '" data-dongia="' + String(item['Đơn giá'] || item['DonGia'] || item['Don_Gia'] || item['Dongia'] || '').replace(/"/g, '&quot;') + '">' + String(ten || id).replace(/</g, '&lt;') + (ten && id ? ' (' + id + ')' : '') + '</option>';
     });
 
     // Dropdown Kho từ bảng DS_kho
@@ -2273,10 +2273,13 @@ window.openQuickExpenseForm = function () {
         confirmButtonColor: '#2E7D32',
         customClass: { popup: 'rounded-4 shadow-lg' },
         didOpen: function () {
-            // Auto-tính thành tiền khi nhập SL hoặc Đơn giá
             var slEl = document.getElementById('qe-soluong');
             var dgEl = document.getElementById('qe-dongia');
             var ttEl = document.getElementById('qe-sotien');
+            var dvtEl = document.getElementById('qe-dvt');
+            var vattuEl = document.getElementById('qe-vattu');
+
+            // Auto-tính thành tiền khi nhập SL hoặc Đơn giá
             function calcTotal() {
                 var sl = parseFloat(slEl.value) || 0;
                 var dg = parseFloat(dgEl.value) || 0;
@@ -2284,12 +2287,39 @@ window.openQuickExpenseForm = function () {
             }
             slEl.addEventListener('input', calcTotal);
             dgEl.addEventListener('input', calcTotal);
+
+            // Auto-fill ĐVT + Đơn giá khi chọn Vật tư
+            vattuEl.addEventListener('change', function () {
+                var opt = vattuEl.options[vattuEl.selectedIndex];
+                if (!opt || !opt.value) return;
+                var dvt = opt.getAttribute('data-dvt');
+                var dg = opt.getAttribute('data-dongia');
+                if (dvt) {
+                    // Thử chọn đúng option trong dropdown ĐVT, nếu không có thì set text
+                    var found = false;
+                    for (var i = 0; i < dvtEl.options.length; i++) {
+                        if (dvtEl.options[i].value === dvt || dvtEl.options[i].text === dvt) {
+                            dvtEl.selectedIndex = i; found = true; break;
+                        }
+                    }
+                    if (!found) {
+                        var newOpt = new Option(dvt, dvt, true, true);
+                        dvtEl.add(newOpt);
+                    }
+                }
+                if (dg && parseFloat(dg) > 0) {
+                    dgEl.value = dg;
+                    calcTotal();
+                }
+            });
         },
         preConfirm: function () {
             var date = document.getElementById('qe-date').value;
             var loai = document.getElementById('qe-loai').value;
             var noidung = document.getElementById('qe-noidung').value;
-            var vattu = document.getElementById('qe-vattu').value;
+            var vattuEl2 = document.getElementById('qe-vattu');
+            var vattu = vattuEl2.value;
+            var vattuTen = vattu ? (vattuEl2.options[vattuEl2.selectedIndex].getAttribute('data-ten') || vattuEl2.options[vattuEl2.selectedIndex].text) : '';
             var kho = document.getElementById('qe-kho').value;
             var soluong = document.getElementById('qe-soluong').value;
             var dvt = document.getElementById('qe-dvt').value;
@@ -2303,7 +2333,7 @@ window.openQuickExpenseForm = function () {
 
             return {
                 date: date, loai: loai, noidung: noidung || '',
-                vattu: vattu || '', kho: kho || '',
+                vattu: vattu || '', vattuTen: vattuTen || '', kho: kho || '',
                 soluong: soluong ? Number(soluong) : '', dvt: dvt || '', dongia: dongia ? Number(dongia) : '',
                 sotien: Number(sotien), ghichu: ghichu || ''
             };
@@ -2362,7 +2392,10 @@ async function submitQuickExpense(params) {
             'NguoiLap': userId
         };
         if (params.noidung) childData['NoiDung'] = params.noidung;
-        if (params.vattu) childData['MaVatTu'] = params.vattu;
+        if (params.vattu) {
+            childData['MaVatTu'] = params.vattu;
+            if (params.vattuTen) childData['TenVatTu'] = params.vattuTen;
+        }
         if (params.kho) childData['Ten_kho'] = params.kho;
         if (params.soluong) childData['SoLuong'] = params.soluong;
         if (params.dvt) childData['DonViTinh'] = params.dvt;
@@ -2397,6 +2430,7 @@ async function submitQuickExpense(params) {
             html: '<div style="font-size:13px; text-align:left;">'
                 + '<p>Phiếu: <b>' + parentId + '</b></p>'
                 + '<p>Loại: <b>' + params.loai + '</b>' + (params.noidung ? ' — ' + params.noidung : '') + '</p>'
+                + (params.vattuTen ? '<p>Vật tư: <b>' + params.vattuTen + '</b></p>' : '')
                 + (params.soluong ? '<p>SL: ' + params.soluong + (params.dvt ? ' ' + params.dvt : '') + (params.dongia ? ' × ' + Number(params.dongia).toLocaleString('vi-VN') + 'đ' : '') + '</p>' : '')
                 + '<p>Thành tiền: <span class="text-success fw-bold">' + params.sotien.toLocaleString('vi-VN') + ' đ</span></p>'
                 + '<hr class="my-2"><p>Tổng phiếu ngày này: <span class="text-danger fw-bold fs-5">' + tongTien.toLocaleString('vi-VN') + ' đ</span></p>'
