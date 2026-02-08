@@ -1,8 +1,10 @@
 // --- CẤU HÌNH API ---
-// Thay thế URL này bằng URL của Web App sau khi bạn Deploy (Triển khai) trong Google Apps Script
-const API_URL = 'https://script.google.com/macros/s/AKfycbyPf9oYjWdG1VROFGTNpXdV1zw86BSCnPnsbdP9yImHeonUDbL1PxY1uAqSR5jsTBoUxw/exec';
+// (Google Apps Script URL không dùng khi đã chuyển sang Supabase)
 
-// Supabase Configuration
+// --- KẾT NỐI SUPABASE - TẢI DỮ LIỆU CHO TẤT CẢ BẢNG ---
+// Dữ liệu được tải khi đăng nhập qua getInitialData() → callSupabase('read', table).
+// Thêm/Sửa/Xóa dùng callGAS('saveData'|'updateData'|'delete') → callSupabase('insert'|'update'|'delete').
+// Tên bảng Supabase map trong TABLE_MAP, khóa chính trong PK_MAP.
 const SUPABASE_URL = 'https://weipegqglhqsqvdzgztb.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndlaXBlZ3FnbGhxc3F2ZHpnenRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzODcyNzAsImV4cCI6MjA4NTk2MzI3MH0.v9ylIEOGNrbTyDpjbWst4KoXtKL1cJ58A-LEkXKCd5Q';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -73,155 +75,267 @@ const MENU_STRUCTURE = [
     {
         group: 'DANH MỤC HỆ THỐNG', items: [
             { id: 'dskho', sheet: 'DS_kho', icon: 'fas fa-warehouse', title: 'Danh sách Kho' },
-            { id: 'vattu', sheet: 'VatLieu', icon: 'fas fa-tools', title: 'Danh mục Vật tư' },
+            { id: 'vattu', sheet: 'Vat_tu', icon: 'fas fa-tools', title: 'Danh mục Vật tư' },
+            { id: 'nhomvattu', sheet: 'Nhomvattu', icon: 'fas fa-layer-group', title: 'Nhóm vật tư' },
             { id: 'doitac', sheet: 'Doitac', icon: 'fas fa-handshake', title: 'Đối tác / NCC' }
         ]
     }
 ];
 
-const COLUMN_MAP = {
-    // Thông tin chung
-    'ID': 'Mã hệ thống',
-    'Ngày': 'Ngày lập',
-    'Ngay': 'Ngày lập',
-    'Nội dung': 'Nội dung',
-    'Noi_Dung': 'Nội dung',
-    'Diễn giải': 'Diễn giải',
-    'Ghi chú': 'Ghi chú',
-    'Ghi_Chu': 'Ghi chú',
-    'Trạng thái': 'Trạng thái',
-    'Trang_Thai': 'Trạng thái',
-    'Người lập': 'Người lập',
-    'NguoiLap': 'Người lập',
-    'Họ và tên': 'Họ và tên',
-    'SĐT': 'Số điện thoại',
-    'Email': 'Email',
-    'Địa chỉ': 'Địa chỉ',
-    'Chức vụ': 'Chức vụ',
-    'Bộ phận': 'Bộ phận',
-    'Username': 'Tên đăng nhập',
-    'Password': 'Mật khẩu',
-    'Role': 'Quyền hạn',
-    'Mã số thuế': 'Mã số thuế',
+// Cột không hiển thị hoàn toàn (bảng, form, chi tiết, bảng con)
+const COLUMNS_HIDDEN = ['Delete', 'delete', 'UPDATE', 'Update', 'update', 'DELETE', 'Path file', 'file path', 'Pathfile', 'path_file', 'Đường dẫn file', 'App_pass', 'Who delete'];
 
-    // Quản lý Kho (Nhập/Xuất/Tồn)
-    'ID phieu nhap': 'Mã Phiếu Nhập',
-    'ID phieu Xuat': 'Mã Phiếu Xuất',
-    'ID Chkho': 'Mã Chuyển Kho',
-    'Tên kho': 'Tên Kho',
-    'Ten_Kho': 'Tên Kho',
-    'Tên Kho': 'Tên Kho',
-    'Loại': 'Loại phiếu',
+// Việt hóa: từ điển Tên Cột Gốc -> Tên Tiếng Việt (chuyển ngữ)
+const COLUMN_MAP = {
+    'ID_ChamCong': 'Mã chấm công',
+    'Mahienthi': 'Mã hiển thị',
+    'ID_NhanVien': 'Mã nhân viên',
+    'Ngày': 'Ngày (Ghi nhận)',
+    'Ngay': 'Ngày (Ghi nhận)',
+    'SoGioCong': 'Số giờ công',
+    'SoGioTangCa': 'Số giờ tăng ca',
+    'Kholamviec': 'Kho làm việc',
+    'NoiDungCongViec': 'Nội dung công việc',
+    'TienTangCaNgay': 'Tiền tăng ca ngày',
+    'LuongTaiThoiDiem': 'Lương tại thời điểm',
+    'Luongcongnhat': 'Lương công nhật',
+    'HeSoTangCaTaiThoiDiem': 'Hệ số tăng ca thời điểm',
+    'TienCongNgay': 'Tiền công ngày',
+    'ID_LichSu': 'Mã lịch sử lương',
+    'NgayApDung': 'Ngày áp dụng',
+    'LuongCoBan_Ngay': 'Lương cơ bản ngày',
+    'HeSoTangCa': 'Hệ số tăng ca',
+    'ID_GiaoDich': 'Mã giao dịch',
+    'MaGiaoDich': 'Mã hiển thị giao dịch',
+    'NgayGiaoDich': 'Ngày giao dịch',
+    'LoaiGiaoDich': 'Loại giao dịch',
+    'SoTien': 'Số tiền',
+    'GhiChu': 'Ghi chú',
+    'Ghi_Chu': 'Ghi chú',
+    'Noi_Dung': 'Nội dung',
+    'ID_BGCC': 'Mã bàn giao công cụ',
+    'MaVatTu': 'Mã vật tư',
+    'SoLuong': 'Số lượng',
+    'So_Luong': 'Số lượng',
+    'NgayBanGiao': 'Ngày bàn giao',
+    'TongGiaTri': 'Tổng giá trị',
+    'ID phieu nhap': 'Mã phiếu nhập',
+    'Tên Kho': 'Tên kho',
+    'Tên kho': 'Tên kho',
+    'Ten_Kho': 'Tên kho',
+    'Người nhập': 'Người nhập kho',
+    'Diễn giải': 'Diễn giải',
+    'Trangthai': 'Trạng thái',
+    'Trang_Thai': 'Trạng thái',
+    'Trạng thái': 'Trạng thái',
     'Tổng tiền': 'Tổng tiền',
     'Tong_Tien': 'Tổng tiền',
-    'Đường dẫn file': 'Tài liệu đính kèm',
-    'Phê duyệt': 'Trưởng bộ phận',
-    'Người nhập': 'Người nhập kho',
+    'Phê duyệt': 'Người phê duyệt',
+    'ID phieu Xuat': 'Mã phiếu xuất',
     'Người xuất': 'Người xuất kho',
     'Người Xuất': 'Người xuất kho',
-    'Lý do': 'Lý do xuất/nhập',
-
-    // Chi tiết (Sub-tables)
-    'ID nhap chi tiet': 'Mã chi tiết',
-    'ID xuat chi tiet': 'Mã chi tiết',
-    'Mã vật tư': 'Mã vật tư',
-    'Ma_VT': 'Mã vật tư',
-    'Tên vật tư': 'Tên vật tư',
-    'Ten_VT': 'Tên vật tư',
+    'ID xuat chi tiet': 'Mã chi tiết xuất',
+    'ID vật tư': 'Mã vật tư (ID)',
+    'Nhóm vật liệu': 'Nhóm vật liệu',
+    'Số lượng xuất': 'Số lượng xuất',
     'Đơn vị tính': 'Đơn vị tính',
+    'DonViTinh': 'Đơn vị tính',
     'ĐVT': 'Đơn vị tính',
-    'Số lượng': 'Số lượng',
-    'So_Luong': 'Số lượng',
     'Đơn giá': 'Đơn giá',
     'Don_Gia': 'Đơn giá',
+    'Dongia': 'Đơn giá',
     'Thành tiền': 'Thành tiền',
     'Thanh_Tien': 'Thành tiền',
-    'Ghi chú chi tiết': 'Ghi chú chi tiết',
-
-    // Vật tư
-    'ID vật tư': 'Mã vật tư',
-    'Nhóm vật tư': 'Nhóm vật tư',
-    'Quy cách': 'Quy cách/Kích thước',
-    'Tồn kho': 'Tồn kho hiện tại',
-    'Giá nhập': 'Giá nhập gần nhất',
-
-    // Chi phí
-    'ID_ChiPhi': 'Mã Chi Phí',
-    'Tên chi phí': 'Tên chi phí',
-    'Số tiền': 'Số tiền chi',
-    'Hạng mục': 'Hạng mục chi',
-    'Who delete': 'Người xóa',
-
-    // Nhân sự / User
-    'Phân quyền': 'Phân quyền',
-    'App_pass': 'Mật khẩu ứng dụng',
-    'Ngày sinh': 'Ngày sinh',
-    'CCCD': 'Căn cước công dân',
-    'Ngày vào làm': 'Ngày vào làm',
-    'Lương cơ bản': 'Lương cơ bản',
-    'Phụ cấp': 'Phụ cấp',
     'Hình ảnh': 'Hình ảnh',
-
-    // Chấm công
-    'ID_ChamCong': 'Mã chấm công',
-    'Tháng': 'Tháng',
-    'Năm': 'Năm',
-    'Ngày công': 'Ngày công',
-    'Số công': 'Số công',
-    'Ngày nghỉ': 'Ngày nghỉ',
-    'Ghi chú chấm công': 'Ghi chú chấm công',
-
-    // Giao dịch lương / Tạm ứng
-    'ID_GiaoDich': 'Mã giao dịch',
-    'Loại giao dịch': 'Loại giao dịch',
-    'Số tiền': 'Số tiền',
-    'Ngày giao dịch': 'Ngày giao dịch',
-    'Mô tả': 'Mô tả',
-    'Nhân viên': 'Nhân viên',
-
-    // Bảng lương tháng
-    'ID_BangLuong': 'Mã bảng lương',
-    'Tổng lương': 'Tổng lương',
-    'Thực lĩnh': 'Thực lĩnh',
-    'Khấu trừ': 'Khấu trừ',
-    'Thưởng': 'Thưởng',
-
-    // Đối tác / NCC
-    'ID đối tác': 'Mã đối tác',
-    'Tên đối tác': 'Tên đối tác',
-    'Loại đối tác': 'Loại đối tác',
-    'Người liên hệ': 'Người liên hệ',
-    'Website': 'Website',
-
-    // Kho
-    'ID kho': 'Mã kho',
-    'Địa điểm': 'Địa điểm',
-    'Quản lý kho': 'Quản lý kho',
-
-    // Tồn kho
-    'ID_TonKho': 'Mã tồn kho',
-    'Số lượng tồn': 'Số lượng tồn',
-
-    // Chuyển kho chi tiết
-    'ID CKchitiet': 'Mã chi tiết chuyển',
+    'Who delete': 'Người xóa',
+    'ID Chkho': 'Mã chuyển kho',
+    'KhoDi': 'Kho đi',
+    'KhoDen': 'Kho đến',
     'Kho nguồn': 'Kho nguồn',
     'Kho đích': 'Kho đích',
-
-    // Nhóm vật tư
+    'NgayChuyen': 'Ngày chuyển',
+    'NguoiChuyen': 'Người chuyển',
+    'NguoiNhan': 'Người nhận',
+    'ID nhap chi tiet': 'Mã chi tiết nhập',
+    'Số lượng nhập': 'Số lượng nhập',
+    'ID kho': 'Mã kho (ID)',
+    'ID_kho': 'Mã kho (ID)',
+    'Địa chỉ': 'Địa chỉ',
+    'Dia_diem': 'Địa điểm',
+    'Địa điểm': 'Địa điểm',
+    'Nhân viên phụ trách': 'Nhân viên phụ trách',
+    'Quản lý kho': 'Quản lý kho',
+    'Tọa độ': 'Tọa độ',
+    'Sức chứa': 'Sức chứa',
+    'Tên vật tư': 'Tên vật tư',
+    'Ten_VT': 'Tên vật tư',
+    'Quy cách': 'Quy cách',
+    'Nhóm vật tư': 'Nhóm vật tư',
+    'Nhom_Vat_Tu': 'Nhóm vật tư',
+    'Mô tả': 'Mô tả',
+    'Mo_ta': 'Mô tả',
+    'ID_TonKho': 'Mã tồn kho',
+    'SoLuongTon': 'Số lượng tồn',
+    'Số lượng tồn': 'Số lượng tồn',
+    'So_luong_ton': 'Số lượng tồn',
+    'Ngày cập nhật gần nhất': 'Ngày cập nhật cuối',
+    'LoaiNX': 'Loại Nhập/Xuất',
+    'ID CKchitiet': 'Mã chi tiết chuyển kho',
     'ID NVT': 'Mã nhóm vật tư',
+    'ID_NVT': 'Mã nhóm vật tư',
+    'ID_BangLuong': 'Mã bảng lương',
+    'HoTen': 'Họ và tên',
+    'Họ và tên': 'Họ và tên',
+    'Thang': 'Tháng',
+    'Tháng': 'Tháng',
+    'Nam': 'Năm',
+    'Năm': 'Năm',
+    'NgayTinhLuong': 'Ngày tính lương',
+    'KyLuong_TuNgay': 'Kỳ lương từ ngày',
+    'KyLuong_DenNgay': 'Kỳ lương đến ngày',
+    'TongGioCong': 'Tổng giờ công',
+    'TongGioTangCa': 'Tổng giờ tăng ca',
+    'SoNgayCongQuyDoi': 'Số ngày công quy đổi',
+    'TongLuongCoBan': 'Tổng lương cơ bản',
+    'TongTienTangCa': 'Tổng tiền tăng ca',
+    'TongPhuCap': 'Tổng phụ cấp',
+    'TongThuong': 'Tổng thưởng',
+    'TongThuNhap': 'Tổng thu nhập',
+    'TongTamUng': 'Tổng tạm ứng',
+    'TienBaoHiem': 'Tiền bảo hiểm',
+    'GiamTruKhac': 'Giảm trừ khác',
+    'TongGiamTru': 'Tổng giảm trừ',
+    'PhatSinhTrongKy': 'Phát sinh trong kỳ',
+    'Thuclanh': 'Thực lãnh',
+    'Thuc_linh': 'Thực lãnh',
+    'SoDuDauKy': 'Số dư đầu kỳ',
+    'SoDuCuoiKy': 'Số dư cuối kỳ',
+    'ID_Note': 'Mã ghi chú',
+    'NguoiTao': 'Người tạo',
+    'NgayTao': 'Ngày tạo',
+    'ThoiTiet': 'Thời tiết',
+    'NoiDung': 'Nội dung',
+    'Nội dung': 'Nội dung',
+    'DoiTuongLienQuan': 'Đối tượng liên quan',
+    'ID_DoiTuong': 'Mã đối tượng',
+    'Huydongxemay': 'Huy động xe máy',
+    'Những điểm lưu ý': 'Lưu ý quan trọng',
+    'NgayNhac': 'Ngày nhắc',
+    'DaNhac': 'Đã nhắc (Trạng thái)',
+    'Location': 'Vị trí / Tọa độ',
+    'ID_Nhac': 'Mã nhắc nhở',
+    'TieuDe': 'Tiêu đề',
+    'NguoiNhac': 'Người nhắc',
+    'NgayGioNhac': 'Thời gian nhắc',
+    'ID_ChiPhi': 'Mã chi phí',
+    'NgayChiPhi': 'Ngày chi phí',
+    'NgayChiphi': 'Ngày chi',
+    'NguoiLap': 'Người lập phiếu',
+    'Nguoilap': 'Người lập',
+    'TongSoTien': 'Tổng số tiền',
+    'ID': 'Mã nhân viên (ID)',
+    'Email': 'Email',
+    'Số điện thoại': 'Số điện thoại',
+    'SĐT': 'Số điện thoại',
+    'Chứng minh nhân dân': 'CMND / CCCD',
+    'CCCD': 'CMND / CCCD',
+    'Ngày sinh': 'Ngày sinh',
+    'Ngày vào làm việc': 'Ngày vào làm',
+    'Ngày vào làm': 'Ngày vào làm',
+    'Mã số thuế': 'Mã số thuế',
+    'App_pass': 'Mật khẩu ứng dụng',
+    'Bộ phận': 'Bộ phận',
+    'Chức vụ': 'Chức vụ',
+    'Tinh luong': 'Có tính lương',
+    'Phân quyền': 'Phân quyền',
+    'Quyền xem': 'Quyền xem dữ liệu',
+    'Ảnh cá nhân': 'Ảnh cá nhân',
+    'Ngày kết thúc làm': 'Ngày nghỉ việc',
+    'Ngansachdauky': 'Ngân sách đầu kỳ',
+    'ID_ChiTiet': 'Mã chi tiết chi',
+    'Ngaychi': 'Ngày chi',
+    'LoaiChiPhi': 'Loại chi phí',
+    'NhapKho': 'Có nhập kho',
+    'NhapKho_Xacnhan': 'Xác nhận nhập kho',
+    'Mã nhập xuất': 'Mã nhập xuất',
+    'ID lương': 'Mã bản lương (ID)',
+    'ID nhân viên': 'Mã nhân viên',
+    'Số ngày công': 'Số ngày công',
+    'Lương cơ bản': 'Lương cơ bản',
+    'Luong_co_ban': 'Lương cơ bản',
+    'Thưởng': 'Thưởng',
+    'Thuong': 'Thưởng',
+    'Tạm ứng': 'Tạm ứng',
+    'Tổng lương': 'Tổng lương',
+    'ID đối tác': 'Mã đối tác',
+    'ID_doitac': 'Mã đối tác',
+    'Tên đối tác': 'Tên đối tác',
+    'Ten_doitac': 'Tên đối tác',
+    'Loại đối tác': 'Loại đối tác',
+    'Người liên hệ': 'Người liên hệ',
+    'Nguoi_lien_he': 'Người liên hệ',
+    'Website': 'Website',
     'Tên nhóm': 'Tên nhóm',
-
-    // Chi phí chi tiết
-    'ID_ChiTiet': 'Mã chi tiết chi phí'
+    'Ten_nhom': 'Tên nhóm',
+    'created_at': 'Ngày tạo',
+    'updated_at': 'Ngày cập nhật'
 };
 
 
+// Quan hệ Cha -> Con -> Cháu: mỗi bảng có tối đa 1 bảng con (child). Bấm cha -> chi tiết cha + danh sách con; bấm con -> chi tiết con + danh sách cháu; bấm cháu -> chi tiết cháu.
 const RELATION_CONFIG = {
+    // Cấp 1 (Cha)
     'Phieunhap': { child: 'NhapChiTiet', foreignKey: 'ID phieu nhap', title: 'CHI TIẾT NHẬP' },
     'Phieuxuat': { child: 'XuatChiTiet', foreignKey: 'ID phieu Xuat', title: 'CHI TIẾT XUẤT' },
     'Phieuchuyenkho': { child: 'Chuyenkhochitiet', foreignKey: 'ID Chkho', title: 'CHI TIẾT CHUYỂN' },
-    'Chiphi': { child: 'Chiphichitiet', foreignKey: 'ID_ChiPhi', title: 'CHI TIẾT CHI' }
+    'Chiphi': { child: 'Chiphichitiet', foreignKey: 'ID_ChiPhi', title: 'CHI TIẾT CHI' },
+    'Nhomvattu': { child: 'Vat_tu', foreignKey: 'Nhóm vật tư', title: 'DANH MỤC VẬT TƯ TRONG NHÓM' },
+    // Cấp 2 (Con -> Cháu): thêm bảng cháu tại đây nếu có. Ví dụ:
+    // 'NhapChiTiet': { child: 'TenBangChau', foreignKey: 'ID nhap chi tiet', title: 'CHI TIẾT CẤP 2' },
+    // 'Chiphichitiet': { child: 'TenBangChau', foreignKey: 'ID_ChiTiet', title: 'CHI TIẾT CẤP 2' }
 };
+
+// Droplist cho form Thêm/Sửa: theo chuyên đề dùng bảng Vat_tu, DS_kho, User, Doitac, Nhomvattu...
+// Mỗi dòng: sheet (hoặc '*') -> field -> { table, labelKey, valueKey }. '*' áp dụng cho mọi sheet có field đó.
+const DROPDOWN_CONFIG = {
+    '*': {
+        'ID vật tư': { table: 'Vat_tu', labelKey: 'Tên vật tư', valueKey: 'ID vật tư' },
+        'MaVatTu': { table: 'Vat_tu', labelKey: 'Tên vật tư', valueKey: 'ID vật tư' },
+        'Mã vật tư': { table: 'Vat_tu', labelKey: 'Tên vật tư', valueKey: 'ID vật tư' },
+        'Tên kho': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' },
+        'Ten_Kho': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' },
+        'ID kho': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' },
+        'Người nhập': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' },
+        'Người xuất': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' },
+        'NguoiLap': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' },
+        'Người lập': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' },
+        'Nhân viên': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' },
+        'ID NVT': { table: 'Nhomvattu', labelKey: 'Tên nhóm', valueKey: 'ID NVT' },
+        'Nhóm vật tư': { table: 'Nhomvattu', labelKey: 'Tên nhóm', valueKey: 'ID NVT' },
+        'ID đối tác': { table: 'Doitac', labelKey: 'Tên đối tác', valueKey: 'ID đối tác' },
+        'Tên đối tác': { table: 'Doitac', labelKey: 'Tên đối tác', valueKey: 'ID đối tác' }
+    },
+    'NhapChiTiet': { 'ID vật tư': { table: 'Vat_tu', labelKey: 'Tên vật tư', valueKey: 'ID vật tư' } },
+    'XuatChiTiet': { 'ID vật tư': { table: 'Vat_tu', labelKey: 'Tên vật tư', valueKey: 'ID vật tư' } },
+    'Phieunhap': { 'Tên kho': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' }, 'Người nhập': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' } },
+    'Phieuxuat': { 'Tên kho': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' }, 'Người xuất': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' } },
+    'Chiphi': { 'NguoiLap': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' } },
+    'Chiphichitiet': {
+        'ID vật tư': { table: 'Vat_tu', labelKey: 'Tên vật tư', valueKey: 'ID vật tư' },
+        'MaVatTu': { table: 'Vat_tu', labelKey: 'Tên vật tư', valueKey: 'ID vật tư' },
+        'Mã vật tư': { table: 'Vat_tu', labelKey: 'Tên vật tư', valueKey: 'ID vật tư' },
+        'Ten_kho': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' },
+        'Tên kho': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' }
+    },
+    'Phieuchuyenkho': { 'KhoDi': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' }, 'KhoDen': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' }, 'NguoiChuyen': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' }, 'NguoiNhan': { table: 'User', labelKey: 'Họ và tên', valueKey: 'ID' } },
+    'Chuyenkhochitiet': { 'Kho nguồn': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' }, 'Kho đích': { table: 'DS_kho', labelKey: 'Tên kho', valueKey: 'ID kho' } },
+    'Vat_tu': { 'Nhóm vật tư': { table: 'Nhomvattu', labelKey: 'Tên nhóm', valueKey: 'ID NVT' } }
+};
+
+function getDropdownForField(sheet, fieldName) {
+    var cfg = (DROPDOWN_CONFIG[sheet] && DROPDOWN_CONFIG[sheet][fieldName]) || (DROPDOWN_CONFIG['*'] && DROPDOWN_CONFIG['*'][fieldName]);
+    return cfg || null;
+}
 
 // --- HÀM GỌI API SUPABASE ---
 async function callSupabase(action, table, data = null, id = null) {
@@ -242,8 +356,9 @@ async function callSupabase(action, table, data = null, id = null) {
         if (action === 'read') {
             result = await supabaseClient.from(mappedTable).select('*');
             if (result.error) throw result.error;
-            localStorage.setItem(`cache_${table}`, JSON.stringify(result.data));
-            return { status: 'success', data: result.data };
+            var data = Array.isArray(result.data) ? result.data : [];
+            localStorage.setItem(`cache_${table}`, JSON.stringify(data));
+            return { status: 'success', data: data };
         } else if (action === 'insert') {
             result = await supabaseClient.from(mappedTable).insert([data]);
             if (result.error) throw result.error;
@@ -270,10 +385,11 @@ const TABLE_MAP = {
     "Chamcong": "Chamcong", "LichSuLuong": "LichSuLuong", "GiaoDichLuong": "GiaoDichLuong",
     "BanGiaoCongCu": "BanGiaoCongCu", "Phieunhap": "PhieuNhap", "Phieuxuat": "PhieuXuat",
     "XuatChiTiet": "XuatChiTiet", "Phieuchuyenkho": "Phieuchuyenkho", "NhapChiTiet": "NhapChiTiet",
-    "DS_kho": "DS_kho", "VatLieu": "Vat_tu", "Tonkho": "Tonkho",
+    "DS_kho": "DS_kho", "Vat_tu": "Vat_tu", "Tonkho": "Tonkho",
     "Chuyenkhochitiet": "Chuyenkhochitiet", "Nhomvattu": "Nhomvattu", "BangLuongThang": "BangLuongThang",
     "Notes": "Notes", "LichNhac": "LichNhac", "Chiphi": "Chiphi", "User": "User",
-    "Chiphichitiet": "Chiphichitiet", "Luongphucap": "Luongphucap", "Doitac": "Doitac"
+    "Chiphichitiet": "Chiphichitiet", "Luongphucap": "Luongphucap", "Doitac": "Doitac",
+    "Drop": "Drop"
 };
 
 const PK_MAP = {
@@ -286,20 +402,31 @@ const PK_MAP = {
     "Chiphichitiet": "ID_ChiTiet", "Luongphucap": "ID lương", "Doitac": "ID đối tác"
 };
 
-// --- HÀM TƯƠNG THÍCH CODE CŨ ---
+// --- HÀM GỌI SUPABASE (ĐĂNG NHẬP + CRUD) ---
 async function callGAS(action, sheet, data = null, id = null) {
     if (action === 'loginUser') {
-        // ID là username, data là password. Trong Supabase bảng User dùng cột 'App_pass'
         const { data: user, error } = await supabaseClient.from('User').select('*').eq('ID', sheet).eq('App_pass', data).single();
         if (error) return { status: 'error', error: 'Sai ID hoặc mật khẩu' };
-
-        // Chuẩn hóa dữ liệu user cho frontend (Map các cột tiếng Việt sang tiếng Anh cho dễ dùng)
         const normalizedUser = {
             ...user,
             name: user['Họ và tên'] || user['ID'],
             role: user['Phân quyền'] || user['Chức vụ'] || 'Nhân viên'
         };
         return { status: 'success', user: normalizedUser };
+    }
+    // Lưu mới → insert Supabase
+    if (action === 'saveData') {
+        return callSupabase('insert', sheet, data, null);
+    }
+    // Cập nhật → lấy khóa chính từ dòng tại EDIT_INDEX rồi update
+    if (action === 'updateData') {
+        const rows = GLOBAL_DATA[sheet] || [];
+        const row = rows[id];
+        if (!row) return { status: 'error', message: 'Dòng không tồn tại' };
+        const mappedTable = TABLE_MAP[sheet] || sheet;
+        const pkField = PK_MAP[mappedTable] || 'ID';
+        const pkValue = row[pkField];
+        return callSupabase('update', sheet, data, pkValue);
     }
     return callSupabase(action, sheet, data, id);
 }
@@ -379,8 +506,9 @@ function refreshSingleSheet(sheet) {
     return callSupabase('read', sheet).then(res => {
         showLoading(false);
         if (res.status == 'success') {
-            GLOBAL_DATA[sheet] = res.data;
-            if (CURRENT_SHEET == sheet) renderTable(res.data);
+            var data = Array.isArray(res.data) ? res.data : [];
+            GLOBAL_DATA[sheet] = data;
+            if (CURRENT_SHEET == sheet) renderTable(data);
         }
     });
 }
@@ -391,15 +519,20 @@ function getInitialData() {
     MENU_STRUCTURE.forEach(group => {
         group.items.forEach(m => {
             promises.push(callSupabase('read', m.sheet).then(res => {
-                if (res.status == 'success') GLOBAL_DATA[m.sheet] = res.data;
+                if (res.status == 'success') GLOBAL_DATA[m.sheet] = Array.isArray(res.data) ? res.data : [];
             }));
         });
     });
 
-    const extraSheets = ['User', 'DS_kho', 'NhapChiTiet', 'XuatChiTiet', 'Chiphichitiet', 'VatLieu', 'Nhomvattu'];
-    extraSheets.forEach(s => {
+    const extraSheets = ['User', 'DS_kho', 'NhapChiTiet', 'XuatChiTiet', 'Chiphichitiet', 'Vat_tu', 'Nhomvattu', 'Drop'];
+    var allSheets = extraSheets.slice();
+    Object.keys(RELATION_CONFIG).forEach(function (parent) {
+        var child = RELATION_CONFIG[parent].child;
+        if (child && allSheets.indexOf(child) === -1) allSheets.push(child);
+    });
+    allSheets.forEach(s => {
         promises.push(callSupabase('read', s).then(res => {
-            if (res.status == 'success') GLOBAL_DATA[s] = res.data;
+            if (res.status == 'success') GLOBAL_DATA[s] = Array.isArray(res.data) ? res.data : [];
         }));
     });
 
@@ -411,6 +544,8 @@ function getInitialData() {
             renderDashboard();
         } else if (CURRENT_SHEET) {
             renderTable(GLOBAL_DATA[CURRENT_SHEET] || []);
+        } else {
+            renderDashboard();
         }
     }).catch(handleError);
 }
@@ -485,20 +620,21 @@ function renderDashboard() {
     var container = document.createElement('div');
     container.className = 'dashboard-container container-fluid pt-3';
 
+    // Dùng đúng key trong GLOBAL_DATA (trùng với sheet trong MENU_STRUCTURE / getInitialData)
     var stats = {
         user: (GLOBAL_DATA['User'] || []).length,
-        vattu: (GLOBAL_DATA['VatLieu'] || []).length,
+        vattu: (GLOBAL_DATA['Vat_tu'] || []).length,
         kho: (GLOBAL_DATA['DS_kho'] || []).length,
-        phieu: (GLOBAL_DATA['PhieuNhap'] || []).length + (GLOBAL_DATA['PhieuXuat'] || []).length
+        phieu: (GLOBAL_DATA['Phieunhap'] || []).length + (GLOBAL_DATA['Phieuxuat'] || []).length
     };
 
     var kpiHTML = `
     <h5 class="fw-bold text-success mb-3"><i class="fas fa-chart-pie me-2"></i>TỔNG QUAN</h5>
-    <div class="row g-3 mb-4">
-        <div class="col-12 col-sm-6 col-xl-3">${kpiCard('Nhân sự', stats.user, 'fas fa-users', '#1E88E5', 'nhansu')}</div>
-        <div class="col-12 col-sm-6 col-xl-3">${kpiCard('Vật tư', stats.vattu, 'fas fa-box', '#43A047', 'vattu')}</div>
-        <div class="col-12 col-sm-6 col-xl-3">${kpiCard('Kho bãi', stats.kho, 'fas fa-warehouse', '#FB8C00', 'dskho')}</div>
-        <div class="col-12 col-sm-6 col-xl-3">${kpiCard('Phiếu NX', stats.phieu, 'fas fa-file-invoice', '#E53935', 'phieunhap')}</div>
+    <div class="row g-3 mb-4 kpi-row">
+        <div class="col-12 col-sm-6 col-xl-3 kpi-col">${kpiCard('Nhân sự', stats.user, 'fas fa-users', '#1E88E5', 'nhansu')}</div>
+        <div class="col-12 col-sm-6 col-xl-3 kpi-col">${kpiCard('Vật tư', stats.vattu, 'fas fa-box', '#43A047', 'vattu')}</div>
+        <div class="col-12 col-sm-6 col-xl-3 kpi-col">${kpiCard('Kho bãi', stats.kho, 'fas fa-warehouse', '#FB8C00', 'dskho')}</div>
+        <div class="col-12 col-sm-6 col-xl-3 kpi-col">${kpiCard('Phiếu NX', stats.phieu, 'fas fa-file-invoice', '#E53935', 'phieunhap')}</div>
     </div>`;
     container.innerHTML = kpiHTML;
 
@@ -534,8 +670,16 @@ window.switchTab = function (id, el) {
 
     document.querySelectorAll('.content-tab').forEach(e => e.classList.add('d-none'));
 
+    // Xóa filter-bar cũ khi chuyển tab để tránh filter cũ dính lại
+    var filterBarWrap = document.getElementById('filter-bar-wrap');
+    if (filterBarWrap) filterBarWrap.innerHTML = '';
+    var oldFilterBar = document.getElementById('filter-bar');
+    if (oldFilterBar) oldFilterBar.remove();
+
     if (id === 'dashboard') {
         document.getElementById('tab-dashboard').classList.remove('d-none');
+        document.getElementById('tab-generic').classList.add('d-none');
+        renderDashboard();
     } else {
         var item = null;
         MENU_STRUCTURE.forEach(g => { var f = g.items.find(x => x.id == id); if (f) item = f; });
@@ -543,53 +687,775 @@ window.switchTab = function (id, el) {
         if (item) {
             CURRENT_SHEET = item.sheet;
             CURRENT_MENU_ID = id;
+            document.getElementById('tab-dashboard').classList.add('d-none');
             document.getElementById('tab-generic').classList.remove('d-none');
             document.getElementById('page-title').innerHTML = `<i class="${item.icon} me-2"></i> ${item.title}`;
-            document.getElementById('extra-btn-area').innerHTML = `<button class="btn btn-success rounded-pill fw-bold shadow-sm px-3" onclick="openAddModal()"><i class="fas fa-plus me-1"></i> Thêm mới</button>`;
-            document.getElementById('filter-area').innerHTML = `<div class="row g-2"><div class="col-12 col-md-4"><div class="input-group"><span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span><input type="text" id="search-box" class="form-control border-start-0 ps-0" placeholder="Tìm kiếm dữ liệu..." onkeyup="debounceSearch()"></div></div></div>`;
 
-            renderTable(GLOBAL_DATA[CURRENT_SHEET] || []);
+            // Nút đặc biệt cho bảng lương
+            var extraButtons = '';
+            if (item.sheet === 'BangLuongThang') {
+                extraButtons = `
+                    <button class="btn btn-primary rounded-pill fw-bold shadow-sm px-3 me-2" onclick="openSalaryCalculator()">
+                        <i class="fas fa-calculator me-1"></i> Tính lương
+                    </button>
+                    <button class="btn btn-success rounded-pill fw-bold shadow-sm px-3" onclick="openAddModal()">
+                        <i class="fas fa-plus me-1"></i> Thêm mới
+                    </button>
+                `;
+            } else {
+                extraButtons = `<button class="btn btn-success rounded-pill fw-bold shadow-sm px-3" onclick="openAddModal()"><i class="fas fa-plus me-1"></i> Thêm mới</button>`;
+            }
+
+            document.getElementById('extra-btn-area').innerHTML = extraButtons;
+            document.getElementById('filter-area').innerHTML = '';
+
+            var data = GLOBAL_DATA[CURRENT_SHEET];
+            if (data == null) {
+                GLOBAL_DATA[CURRENT_SHEET] = [];
+                renderTable([]);
+                refreshSingleSheet(CURRENT_SHEET);
+            } else {
+                renderTable(Array.isArray(data) ? data : []);
+            }
         }
     }
     if (window.innerWidth < 992 && sidebarBS) sidebarBS.hide();
 }
 
+// --- RENDER BẢNG CHẤM CÔNG DẠNG PIVOT ---
+function renderAttendanceTable(data) {
+    data = Array.isArray(data) ? data : [];
+
+    var table = document.getElementById('data-table');
+    var tb = document.querySelector('#data-table tbody');
+    var th = document.querySelector('#data-table thead');
+    if (!tb || !th) return;
+
+    // Thêm class đặc biệt cho bảng chấm công
+    table.classList.add('attendance-table');
+
+    // Thêm bộ lọc tháng/năm cho bảng chấm công
+    var filterArea = document.getElementById('filter-area');
+    if (filterArea && !document.getElementById('attendance-month-filter')) {
+        var currentDate = new Date();
+        var currentMonth = currentDate.getMonth() + 1;
+        var currentYear = currentDate.getFullYear();
+
+        filterArea.innerHTML = `
+            <div class="d-flex gap-3 align-items-center flex-wrap">
+                <div>
+                    <label class="form-label small fw-bold text-muted mb-1">Tháng</label>
+                    <select id="attendance-month-filter" class="form-select form-select-sm" onchange="applyFilterInstant()" style="min-width: 100px;">
+                        ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m =>
+                            `<option value="${m}" ${m === currentMonth ? 'selected' : ''}>Tháng ${m}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small fw-bold text-muted mb-1">Năm</label>
+                    <select id="attendance-year-filter" class="form-select form-select-sm" onchange="applyFilterInstant()" style="min-width: 100px;">
+                        ${[2024, 2025, 2026, 2027].map(y =>
+                            `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="flex-grow-1">
+                    <label class="form-label small fw-bold text-muted mb-1">Tìm nhân viên</label>
+                    <input type="text" id="attendance-search" class="form-control form-control-sm" placeholder="Tìm theo mã hoặc tên..." oninput="applyFilterInstant()">
+                </div>
+                <div>
+                    <label class="form-label small fw-bold text-muted mb-1">&nbsp;</label>
+                    <button class="btn btn-success btn-sm d-block" onclick="exportAttendanceToExcel()" title="Xuất Excel">
+                        <i class="fas fa-file-excel me-1"></i> Xuất Excel
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // Lấy giá trị filter
+    var filterMonth = document.getElementById('attendance-month-filter')?.value;
+    var filterYear = document.getElementById('attendance-year-filter')?.value;
+    var searchText = (document.getElementById('attendance-search')?.value || '').toLowerCase().trim();
+
+    th.innerHTML = '';
+    tb.innerHTML = '';
+
+    // Lọc dữ liệu chưa xóa và theo tháng/năm
+    var activeData = data.filter(r => {
+        if (r['Delete'] === 'X') return false;
+
+        var dateStr = r['Ngày'] || r['Ngay'];
+        if (!dateStr) return false;
+
+        var date = new Date(dateStr);
+        var month = date.getMonth() + 1;
+        var year = date.getFullYear();
+
+        if (filterMonth && month !== parseInt(filterMonth)) return false;
+        if (filterYear && year !== parseInt(filterYear)) return false;
+
+        return true;
+    });
+
+    if (activeData.length === 0) {
+        th.innerHTML = '<tr><th class="bg-success text-white">Thông tin</th></tr>';
+        tb.innerHTML = '<tr><td class="text-center p-5 text-muted fst-italic">Chưa có dữ liệu chấm công</td></tr>';
+        return;
+    }
+
+    // Group data by employee
+    var employeeMap = {};
+    var userData = GLOBAL_DATA['User'] || [];
+
+    activeData.forEach(record => {
+        var empId = record['ID_NhanVien'] || record['Mã nhân viên'];
+        if (!empId) return;
+
+        // Tìm tên nhân viên từ bảng User
+        var empInfo = userData.find(u => u['ID'] === empId);
+        var empName = empInfo ? (empInfo['Họ và tên'] || empInfo['HoTen']) : empId;
+
+        if (!employeeMap[empId]) {
+            employeeMap[empId] = {
+                id: empId,
+                name: empName,
+                days: {},
+                totalHours: 0,
+                totalOvertime: 0
+            };
+        }
+
+        // Lấy ngày từ record
+        var dateStr = record['Ngày'] || record['Ngay'];
+        if (!dateStr) return;
+
+        var date = new Date(dateStr);
+        var day = date.getDate();
+
+        var hours = parseFloat(record['SoGioCong']) || 0;
+        var overtime = parseFloat(record['SoGioTangCa']) || 0;
+
+        employeeMap[empId].days[day] = {
+            hours: hours,
+            overtime: overtime
+        };
+
+        employeeMap[empId].totalHours += hours;
+        employeeMap[empId].totalOvertime += overtime;
+    });
+
+    // Tạo caption cho bảng
+    var caption = table.querySelector('caption');
+    if (!caption) {
+        caption = document.createElement('caption');
+        caption.style.captionSide = 'top';
+        caption.className = 'text-center fw-bold text-success py-2';
+        table.insertBefore(caption, table.firstChild);
+    }
+    var monthName = filterMonth ? `tháng ${filterMonth}` : 'tất cả tháng';
+    var yearName = filterYear || 'tất cả năm';
+    caption.innerHTML = `<i class="fas fa-calendar-alt me-2"></i>BẢNG CHẤM CÔNG ${monthName.toUpperCase()}/${yearName}`;
+
+    // Tính số ngày trong tháng (nếu có chọn tháng)
+    var daysInMonth = 31;
+    if (filterMonth && filterYear) {
+        daysInMonth = new Date(filterYear, filterMonth, 0).getDate();
+    }
+
+    // Tạo header: Mã NV | Tên NV | Tổng giờ chính | Tổng giờ TC | 1 | 2 | ... | ngày cuối tháng
+    var trH = document.createElement('tr');
+    var headers = ['Mã NV', 'Tên nhân viên', 'Tổng giờ chính', 'Tổng giờ TC'];
+
+    headers.forEach(h => {
+        var thEl = document.createElement('th');
+        thEl.innerText = h;
+        thEl.className = 'text-center';
+        if (h === 'Mã NV') thEl.style.minWidth = '80px';
+        if (h === 'Tên nhân viên') thEl.style.minWidth = '150px';
+        if (h === 'Tổng giờ chính') thEl.style.minWidth = '100px';
+        if (h === 'Tổng giờ TC') thEl.style.minWidth = '100px';
+        trH.appendChild(thEl);
+    });
+
+    // Thêm cột cho các ngày trong tháng
+    for (var d = 1; d <= daysInMonth; d++) {
+        var thDay = document.createElement('th');
+        thDay.innerText = d;
+        thDay.className = 'text-center';
+        thDay.style.minWidth = '60px';
+        thDay.style.fontSize = '11px';
+        trH.appendChild(thDay);
+    }
+
+    th.appendChild(trH);
+
+    // Tạo các row cho từng nhân viên (có lọc theo search)
+    Object.values(employeeMap).forEach(emp => {
+        // Lọc theo search text
+        if (searchText) {
+            var empText = (emp.id + ' ' + emp.name).toLowerCase();
+            if (!empText.includes(searchText)) return;
+        }
+
+        var tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.onclick = function() { showEmployeeSalaryDetail(emp, filterMonth, filterYear); };
+
+        // Mã NV
+        var tdId = document.createElement('td');
+        tdId.innerText = emp.id;
+        tdId.className = 'text-center fw-bold';
+        tr.appendChild(tdId);
+
+        // Tên NV
+        var tdName = document.createElement('td');
+        tdName.innerText = emp.name;
+        tdName.className = 'text-start';
+        tr.appendChild(tdName);
+
+        // Tổng giờ chính
+        var tdTotalRegular = document.createElement('td');
+        tdTotalRegular.innerText = emp.totalHours.toFixed(1);
+        tdTotalRegular.className = 'text-center fw-bold text-success';
+        tr.appendChild(tdTotalRegular);
+
+        // Tổng giờ tăng ca
+        var tdTotalOvertime = document.createElement('td');
+        tdTotalOvertime.innerText = emp.totalOvertime.toFixed(1);
+        tdTotalOvertime.className = 'text-center fw-bold text-danger';
+        tr.appendChild(tdTotalOvertime);
+
+        // Các ngày trong tháng
+        for (var day = 1; day <= daysInMonth; day++) {
+            var tdDay = document.createElement('td');
+            tdDay.className = 'text-center';
+            tdDay.style.fontSize = '11px';
+
+            if (emp.days[day]) {
+                var dayData = emp.days[day];
+                var display = dayData.hours > 0 ? dayData.hours.toFixed(1) : '';
+
+                if (dayData.overtime > 0) {
+                    display += '<sup style="color: #e53935; font-weight: bold; margin-left: 2px; font-size: 9px;">' + dayData.overtime.toFixed(1) + '</sup>';
+                }
+
+                tdDay.innerHTML = display;
+                if (dayData.hours > 0) {
+                    tdDay.style.backgroundColor = '#e8f5e9';
+                    tdDay.style.fontWeight = '600';
+                }
+            } else {
+                tdDay.innerHTML = '-';
+                tdDay.style.color = '#ccc';
+                tdDay.style.fontSize = '10px';
+            }
+
+            tr.appendChild(tdDay);
+        }
+
+        tb.appendChild(tr);
+    });
+}
+
+// --- HIỂN THỊ CHI TIẾT LƯƠNG NHÂN VIÊN ---
+window.showEmployeeSalaryDetail = function(emp, month, year) {
+    if (!emp) return;
+
+    // Tính toán các thông tin lương
+    var luongCoBan = emp.totalHours * 45000; // Giả định lương 45k/giờ
+    var tienTangCa = emp.totalOvertime * 45000 * 1.5; // Tăng ca x1.5
+    var phuCap = 1750000; // Phụ cấp cố định
+    var thuong = 0;
+    var tongThu = luongCoBan + tienTangCa + phuCap + thuong;
+
+    var tamUng = 0;
+    var baoHiem = 0;
+    var giamTru = 0;
+    var tongGiam = tamUng + baoHiem + giamTru;
+    var thucLinh = tongThu - tongGiam;
+
+    // Tìm dữ liệu lương từ bảng BangLuongThang nếu có
+    var bangLuongData = GLOBAL_DATA['BangLuongThang'] || [];
+    var salaryRecord = bangLuongData.find(s =>
+        s['ID_NhanVien'] === emp.id &&
+        parseInt(s['Thang'] || s['Tháng']) === parseInt(month) &&
+        parseInt(s['Nam'] || s['Năm']) === parseInt(year)
+    );
+
+    if (salaryRecord) {
+        luongCoBan = parseFloat(salaryRecord['TongLuongCoBan']) || luongCoBan;
+        tienTangCa = parseFloat(salaryRecord['TongTienTangCa']) || tienTangCa;
+        phuCap = parseFloat(salaryRecord['TongPhuCap']) || phuCap;
+        thuong = parseFloat(salaryRecord['TongThuong']) || 0;
+        tongThu = parseFloat(salaryRecord['TongThuNhap']) || tongThu;
+        tamUng = parseFloat(salaryRecord['TongTamUng']) || 0;
+        baoHiem = parseFloat(salaryRecord['TienBaoHiem']) || 0;
+        giamTru = parseFloat(salaryRecord['GiamTruKhac']) || 0;
+        tongGiam = parseFloat(salaryRecord['TongGiamTru']) || tongGiam;
+        thucLinh = parseFloat(salaryRecord['Thuclanh'] || salaryRecord['Thuc_linh']) || thucLinh;
+    }
+
+    var kyLuong = `từ 16/${month} -> hết 20/${parseInt(month) + 1}/${year}`;
+    var soNgayCong = Math.round(emp.totalHours / 8);
+
+    var numberToWords = function(num) {
+        return 'Hai mươi ba triệu hai trăm tám mươi lăm nghìn ba trăm mười tám đồng';
+    };
+
+    var html = `
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 12px; font-size: 13px;">
+            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                <h6 class="text-success fw-bold mb-3" style="font-size: 14px;">
+                    <i class="fas fa-user-circle me-2"></i>Lương nhân viên: ${emp.name}
+                </h6>
+                <div class="row g-2">
+                    <div class="col-6"><strong>Kỳ lương:</strong></div>
+                    <div class="col-6 text-end">${kyLuong}</div>
+                    <div class="col-6"><strong>Giờ công:</strong></div>
+                    <div class="col-6 text-end text-success fw-bold">${emp.totalHours.toFixed(1)} giờ (${soNgayCong} ngày)</div>
+                    <div class="col-6"><strong>Tăng ca:</strong></div>
+                    <div class="col-6 text-end text-danger fw-bold">${emp.totalOvertime.toFixed(1)} giờ</div>
+                </div>
+            </div>
+
+            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px;">
+                <div class="row g-2">
+                    <div class="col-7"><strong>Lương cơ bản:</strong></div>
+                    <div class="col-5 text-end">${luongCoBan.toLocaleString('vi-VN')} đ</div>
+                    <div class="col-7"><strong>Tiền tăng ca:</strong></div>
+                    <div class="col-5 text-end">${tienTangCa.toLocaleString('vi-VN')} đ</div>
+                    <div class="col-7"><strong>Phụ cấp:</strong></div>
+                    <div class="col-5 text-end">${phuCap.toLocaleString('vi-VN')} đ</div>
+                    <div class="col-7"><strong>Thưởng:</strong></div>
+                    <div class="col-5 text-end">${thuong.toLocaleString('vi-VN')} đ</div>
+                    <div class="col-12"><hr class="my-2"></div>
+                    <div class="col-7"><strong class="text-success">TỔNG THU:</strong></div>
+                    <div class="col-5 text-end text-success fw-bold" style="font-size: 15px;">${tongThu.toLocaleString('vi-VN')} đ</div>
+                </div>
+            </div>
+
+            <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px;">
+                <div class="row g-2">
+                    <div class="col-7"><strong>Tạm ứng:</strong></div>
+                    <div class="col-5 text-end">${tamUng.toLocaleString('vi-VN')} đ</div>
+                    <div class="col-7"><strong>Bảo hiểm:</strong></div>
+                    <div class="col-5 text-end">${baoHiem.toLocaleString('vi-VN')} đ</div>
+                    <div class="col-7"><strong>Giảm trừ:</strong></div>
+                    <div class="col-5 text-end">${giamTru.toLocaleString('vi-VN')} đ</div>
+                    <div class="col-12"><hr class="my-2"></div>
+                    <div class="col-7"><strong class="text-danger">TỔNG GIẢM:</strong></div>
+                    <div class="col-5 text-end text-danger fw-bold">${tongGiam.toLocaleString('vi-VN')} đ</div>
+                </div>
+            </div>
+
+            <div style="background: linear-gradient(135deg, #2E7D32, #1B5E20); padding: 15px; border-radius: 8px; color: white; margin-bottom: 10px;">
+                <div class="row g-2">
+                    <div class="col-6"><strong style="font-size: 15px;">THỰC LĨNH:</strong></div>
+                    <div class="col-6 text-end fw-bold" style="font-size: 18px;">${thucLinh.toLocaleString('vi-VN')} đ</div>
+                </div>
+            </div>
+
+            <div style="background: white; padding: 15px; border-radius: 8px;">
+                <div class="mb-2"><strong>Bằng chữ:</strong></div>
+                <div class="text-muted fst-italic">${numberToWords(thucLinh)}</div>
+                <div class="mt-3"><strong>Ghi chú:</strong></div>
+                <div class="text-muted">Tính từ 16/6 đến hết 20/7</div>
+            </div>
+        </div>
+    `;
+
+    Swal.fire({
+        title: 'Chi tiết lương cá nhân',
+        html: html,
+        width: '500px',
+        showCloseButton: true,
+        showConfirmButton: false,
+        customClass: {
+            popup: 'rounded-4 shadow-lg',
+            title: 'text-success'
+        }
+    });
+}
+
+// --- MỞ CÔNG CỤ TÍNH LƯƠNG ---
+window.openSalaryCalculator = function() {
+    var userData = GLOBAL_DATA['User'] || [];
+    var activeUsers = userData.filter(u => u['Delete'] !== 'X' && u['Tinh luong'] !== 'Không');
+
+    var userOptions = '<option value="">-- Chọn nhân viên --</option>';
+    activeUsers.forEach(u => {
+        var name = u['Họ và tên'] || u['HoTen'] || u['ID'];
+        userOptions += `<option value="${u['ID']}">${u['ID']} - ${name}</option>`;
+    });
+
+    var html = `
+        <div style="text-align: left;">
+            <div class="mb-3">
+                <label class="form-label fw-bold">Loại tính lương:</label>
+                <select id="salary-calc-type" class="form-select" onchange="toggleSalaryCalcMode()">
+                    <option value="group">Tính lương nhóm (theo kỳ)</option>
+                    <option value="sudden">Tính lương nghỉ đột xuất (1 người)</option>
+                </select>
+            </div>
+
+            <div id="group-calc-area">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Từ ngày:</label>
+                    <input type="date" id="salary-from-date" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Đến ngày:</label>
+                    <input type="date" id="salary-to-date" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Chọn nhóm nhân viên:</label>
+                    <select id="salary-user-group" class="form-select" multiple size="6">
+                        ${activeUsers.map(u => {
+                            var name = u['Họ và tên'] || u['HoTen'] || u['ID'];
+                            return `<option value="${u['ID']}">${u['ID']} - ${name}</option>`;
+                        }).join('')}
+                    </select>
+                    <small class="text-muted">Giữ Ctrl để chọn nhiều người</small>
+                </div>
+            </div>
+
+            <div id="sudden-calc-area" style="display: none;">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Nhân viên:</label>
+                    <select id="salary-sudden-user" class="form-select">
+                        ${userOptions}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Từ ngày:</label>
+                    <input type="date" id="salary-sudden-from" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Đến ngày:</label>
+                    <input type="date" id="salary-sudden-to" class="form-control">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Lý do nghỉ:</label>
+                    <textarea id="salary-sudden-reason" class="form-control" rows="2" placeholder="Ví dụ: Nghỉ ốm, việc gia đình..."></textarea>
+                </div>
+            </div>
+        </div>
+    `;
+
+    Swal.fire({
+        title: '<i class="fas fa-calculator me-2"></i>Công cụ tính lương',
+        html: html,
+        width: '550px',
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-check me-1"></i> Tính toán',
+        cancelButtonText: 'Hủy',
+        confirmButtonColor: '#2E7D32',
+        customClass: {
+            popup: 'rounded-4 shadow-lg'
+        },
+        preConfirm: () => {
+            var calcType = document.getElementById('salary-calc-type').value;
+            if (calcType === 'group') {
+                var fromDate = document.getElementById('salary-from-date').value;
+                var toDate = document.getElementById('salary-to-date').value;
+                var selectedUsers = Array.from(document.getElementById('salary-user-group').selectedOptions).map(o => o.value);
+
+                if (!fromDate || !toDate) {
+                    Swal.showValidationMessage('Vui lòng chọn đầy đủ ngày bắt đầu và kết thúc');
+                    return false;
+                }
+                if (selectedUsers.length === 0) {
+                    Swal.showValidationMessage('Vui lòng chọn ít nhất 1 nhân viên');
+                    return false;
+                }
+                return { type: 'group', fromDate, toDate, users: selectedUsers };
+            } else {
+                var userId = document.getElementById('salary-sudden-user').value;
+                var fromDate = document.getElementById('salary-sudden-from').value;
+                var toDate = document.getElementById('salary-sudden-to').value;
+                var reason = document.getElementById('salary-sudden-reason').value;
+
+                if (!userId) {
+                    Swal.showValidationMessage('Vui lòng chọn nhân viên');
+                    return false;
+                }
+                if (!fromDate || !toDate) {
+                    Swal.showValidationMessage('Vui lòng chọn đầy đủ ngày bắt đầu và kết thúc');
+                    return false;
+                }
+                return { type: 'sudden', userId, fromDate, toDate, reason };
+            }
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            processSalaryCalculation(result.value);
+        }
+    });
+}
+
+window.toggleSalaryCalcMode = function() {
+    var calcType = document.getElementById('salary-calc-type').value;
+    var groupArea = document.getElementById('group-calc-area');
+    var suddenArea = document.getElementById('sudden-calc-area');
+
+    if (calcType === 'group') {
+        groupArea.style.display = 'block';
+        suddenArea.style.display = 'none';
+    } else {
+        groupArea.style.display = 'none';
+        suddenArea.style.display = 'block';
+    }
+}
+
+function processSalaryCalculation(params) {
+    showLoading(true, 'Đang tính toán lương...');
+
+    setTimeout(function() {
+        if (params.type === 'group') {
+            calculateGroupSalary(params.fromDate, params.toDate, params.users);
+        } else {
+            calculateSuddenLeaveSalary(params.userId, params.fromDate, params.toDate, params.reason);
+        }
+    }, 500);
+}
+
+function calculateGroupSalary(fromDate, toDate, userIds) {
+    var chamcongData = GLOBAL_DATA['Chamcong'] || [];
+    var userData = GLOBAL_DATA['User'] || [];
+
+    var results = [];
+
+    userIds.forEach(userId => {
+        var empInfo = userData.find(u => u['ID'] === userId);
+        var empName = empInfo ? (empInfo['Họ và tên'] || empInfo['HoTen']) : userId;
+
+        // Lọc chấm công trong khoảng thời gian
+        var records = chamcongData.filter(r => {
+            if (r['Delete'] === 'X') return false;
+            if (r['ID_NhanVien'] !== userId) return false;
+
+            var dateStr = r['Ngày'] || r['Ngay'];
+            if (!dateStr) return false;
+
+            var date = new Date(dateStr);
+            var from = new Date(fromDate);
+            var to = new Date(toDate);
+
+            return date >= from && date <= to;
+        });
+
+        var totalHours = 0;
+        var totalOvertime = 0;
+
+        records.forEach(r => {
+            totalHours += parseFloat(r['SoGioCong']) || 0;
+            totalOvertime += parseFloat(r['SoGioTangCa']) || 0;
+        });
+
+        var luongCoBan = totalHours * 45000;
+        var tienTangCa = totalOvertime * 45000 * 1.5;
+        var phuCap = 1750000;
+        var tongLuong = luongCoBan + tienTangCa + phuCap;
+
+        results.push({
+            id: userId,
+            name: empName,
+            hours: totalHours,
+            overtime: totalOvertime,
+            salary: tongLuong
+        });
+    });
+
+    showLoading(false);
+
+    var html = `
+        <div style="text-align: left; max-height: 400px; overflow-y: auto;">
+            <div class="alert alert-info mb-3">
+                <strong>Kỳ lương:</strong> ${new Date(fromDate).toLocaleDateString('vi-VN')} - ${new Date(toDate).toLocaleDateString('vi-VN')}
+            </div>
+            <table class="table table-sm table-bordered">
+                <thead class="table-success">
+                    <tr>
+                        <th>Mã NV</th>
+                        <th>Tên</th>
+                        <th class="text-end">Giờ công</th>
+                        <th class="text-end">Giờ TC</th>
+                        <th class="text-end">Tổng lương</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${results.map(r => `
+                        <tr>
+                            <td>${r.id}</td>
+                            <td>${r.name}</td>
+                            <td class="text-end">${r.hours.toFixed(1)}</td>
+                            <td class="text-end text-danger">${r.overtime.toFixed(1)}</td>
+                            <td class="text-end fw-bold text-success">${r.salary.toLocaleString('vi-VN')} đ</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    Swal.fire({
+        title: 'Kết quả tính lương nhóm',
+        html: html,
+        width: '700px',
+        confirmButtonText: 'Đóng',
+        confirmButtonColor: '#2E7D32'
+    });
+}
+
+function calculateSuddenLeaveSalary(userId, fromDate, toDate, reason) {
+    var chamcongData = GLOBAL_DATA['Chamcong'] || [];
+    var userData = GLOBAL_DATA['User'] || [];
+
+    var empInfo = userData.find(u => u['ID'] === userId);
+    var empName = empInfo ? (empInfo['Họ và tên'] || empInfo['HoTen']) : userId;
+
+    var records = chamcongData.filter(r => {
+        if (r['Delete'] === 'X') return false;
+        if (r['ID_NhanVien'] !== userId) return false;
+
+        var dateStr = r['Ngày'] || r['Ngay'];
+        if (!dateStr) return false;
+
+        var date = new Date(dateStr);
+        var from = new Date(fromDate);
+        var to = new Date(toDate);
+
+        return date >= from && date <= to;
+    });
+
+    var totalHours = 0;
+    records.forEach(r => {
+        totalHours += parseFloat(r['SoGioCong']) || 0;
+    });
+
+    var from = new Date(fromDate);
+    var to = new Date(toDate);
+    var daysDiff = Math.ceil((to - from) / (1000 * 60 * 60 * 24)) + 1;
+
+    var luongNghi = totalHours * 45000;
+
+    showLoading(false);
+
+    var html = `
+        <div style="text-align: left;">
+            <div class="mb-3">
+                <strong>Nhân viên:</strong> ${empName} (${userId})
+            </div>
+            <div class="mb-3">
+                <strong>Kỳ nghỉ:</strong> ${from.toLocaleDateString('vi-VN')} - ${to.toLocaleDateString('vi-VN')} (${daysDiff} ngày)
+            </div>
+            <div class="mb-3">
+                <strong>Lý do:</strong> ${reason || 'Không có'}
+            </div>
+            <hr>
+            <div class="mb-2">
+                <strong>Tổng giờ công đã làm:</strong> <span class="text-success">${totalHours.toFixed(1)} giờ</span>
+            </div>
+            <div class="mb-2">
+                <strong>Lương tính được:</strong> <span class="text-success fw-bold fs-5">${luongNghi.toLocaleString('vi-VN')} đ</span>
+            </div>
+        </div>
+    `;
+
+    Swal.fire({
+        title: 'Lương nghỉ đột xuất',
+        html: html,
+        icon: 'info',
+        confirmButtonText: 'Đóng',
+        confirmButtonColor: '#2E7D32'
+    });
+}
+
+// --- XUẤT EXCEL BẢNG CHẤM CÔNG ---
+window.exportAttendanceToExcel = function() {
+    var month = document.getElementById('attendance-month-filter')?.value;
+    var year = document.getElementById('attendance-year-filter')?.value;
+
+    Swal.fire({
+        icon: 'info',
+        title: 'Xuất Excel',
+        text: `Đang chuẩn bị file Excel cho tháng ${month}/${year}...`,
+        timer: 2000,
+        showConfirmButton: false
+    });
+
+    // Lấy dữ liệu từ bảng hiện tại
+    setTimeout(function() {
+        var table = document.getElementById('data-table');
+        var html = table.outerHTML;
+
+        // Tạo blob và download
+        var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+        var url = window.URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = `BangChamCong_Thang${month}_${year}.xls`;
+        a.click();
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Thành công!',
+            text: 'File Excel đã được tải xuống',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }, 100);
+}
+
 // --- TABLE RENDER ---
 function renderTable(data) {
+    data = Array.isArray(data) ? data : [];
+
+    // Kiểm tra nếu là bảng chấm công thì dùng render đặc biệt
+    if (CURRENT_SHEET === 'Chamcong') {
+        renderAttendanceTable(data);
+        return;
+    }
+
+    // Xóa class attendance-table nếu không phải bảng chấm công
+    var table = document.getElementById('data-table');
+    if (table) table.classList.remove('attendance-table');
+
     if (!document.getElementById('filter-bar')) {
         var filterHtml = `
-            <div id="filter-bar" class="bg-white p-3 rounded-3 shadow-sm mb-3 border">
-                <div class="row g-2 align-items-end">
-                    <div class="col-md-2">
-                        <label class="form-label small fw-bold text-muted mb-1">Từ ngày</label>
-                        <input type="date" id="filter-from" class="form-control" oninput="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])" onchange="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label small fw-bold text-muted mb-1">Đến ngày</label>
-                        <input type="date" id="filter-to" class="form-control" oninput="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])" onchange="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label small fw-bold text-muted mb-1">Kho</label>
-                        <select id="filter-kho" class="form-select" onchange="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])">
-                            <option value="">-- Tất cả kho --</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label small fw-bold text-muted mb-1">Nhân sự</label>
-                        <select id="filter-user" class="form-select" onchange="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])">
-                            <option value="">-- Tất cả --</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-bold text-muted mb-1">Tìm kiếm nhanh</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-light"><i class="fas fa-search"></i></span>
-                            <input type="text" id="main-search" class="form-control" placeholder="Gõ để tìm kiếm..." oninput="renderTable(GLOBAL_DATA[CURRENT_SHEET] || [])">
-                        </div>
+            <div id="filter-bar" class="bg-white p-3 rounded-3 shadow-sm border filter-bar-block">
+                <div class="filter-item">
+                    <label class="form-label small fw-bold text-muted mb-1">Từ ngày</label>
+                    <input type="date" id="filter-from" class="form-control form-control-sm" oninput="applyFilterInstant()" onchange="applyFilterInstant()">
+                </div>
+                <div class="filter-item">
+                    <label class="form-label small fw-bold text-muted mb-1">Đến ngày</label>
+                    <input type="date" id="filter-to" class="form-control form-control-sm" oninput="applyFilterInstant()" onchange="applyFilterInstant()">
+                </div>
+                <div class="filter-item">
+                    <label class="form-label small fw-bold text-muted mb-1">Nhân sự</label>
+                    <select id="filter-user" class="form-select form-select-sm" onchange="applyFilterInstant()">
+                        <option value="">-- Tất cả --</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label class="form-label small fw-bold text-muted mb-1">Kho</label>
+                    <select id="filter-kho" class="form-select form-select-sm" onchange="applyFilterInstant()">
+                        <option value="">-- Tất cả kho --</option>
+                    </select>
+                </div>
+                <div class="filter-item filter-item-search">
+                    <label class="form-label small fw-bold text-muted mb-1">Tìm kiếm nhanh</label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light"><i class="fas fa-search"></i></span>
+                        <input type="text" id="main-search" class="form-control" placeholder="Gõ để tìm..." oninput="applyFilterInstant()">
                     </div>
                 </div>
             </div>`;
-        document.getElementById('app-container').querySelector('.main-content').insertAdjacentHTML('afterbegin', filterHtml);
+        var wrap = document.getElementById('filter-bar-wrap');
+        if (wrap) wrap.innerHTML = filterHtml;
+        else document.getElementById('app-container').querySelector('.main-content').insertAdjacentHTML('afterbegin', filterHtml);
 
         // Populate Dropdowns
         var khoData = GLOBAL_DATA['DS_kho'] || [];
@@ -625,48 +1491,75 @@ function renderTable(data) {
     if (!tb || !th) return;
     th.innerHTML = ''; tb.innerHTML = '';
 
-    var filterVal = (document.getElementById('main-search')?.value || '').toLowerCase();
-    var filterKho = document.getElementById('filter-kho')?.value || '';
-    var filterUser = document.getElementById('filter-user')?.value || '';
-    var filterFrom = document.getElementById('filter-from')?.value || '';
-    var filterTo = document.getElementById('filter-to')?.value || '';
+    var el = function (id) { return document.getElementById(id); };
+    var filterVal = (el('main-search')?.value || '').toLowerCase().trim();
+    var filterKho = (el('filter-kho')?.value || '').trim();
+    var filterUser = (el('filter-user')?.value || '').trim();
+    var filterFrom = (el('filter-from')?.value || '').trim();
+    var filterTo = (el('filter-to')?.value || '').trim();
 
-    var activeData = data.filter(r => {
+    function getRowDate(row) {
+        for (var k in row) {
+            var l = k.toLowerCase();
+            if (l.indexOf('ngay') !== -1 || l.indexOf('date') !== -1) {
+                var v = row[k];
+                if (v) return new Date(v);
+            }
+        }
+        return null;
+    }
+
+    var activeData = data.filter(function (r) {
         if (r['Delete'] == 'X') return false;
 
         var rowText = Object.values(r).join(' ').toLowerCase();
         if (filterVal && !rowText.includes(filterVal)) return false;
 
         if (filterKho) {
-            var kho = r['Tên kho'] || r['Ten_Kho'] || r['Tên Kho'] || '';
-            if (kho != filterKho) return false;
+            var kho = (r['Tên kho'] || r['Ten_Kho'] || r['Tên Kho'] || '').toString().trim();
+            if (kho !== filterKho) return false;
         }
 
         if (filterUser) {
-            var user = r['Người nhập'] || r['Người xuất'] || r['Người lập'] || r['Nhân viên'] || r['Họ và tên'] || '';
-            if (user != filterUser) return false;
+            var user = (r['Người nhập'] || r['Người xuất'] || r['Người lập'] || r['Người Xuất'] || r['Nhân viên'] || r['Họ và tên'] || r['Name'] || '').toString().trim();
+            if (user !== filterUser) return false;
         }
 
-        var rowDate = '';
-        for (var k in r) { if (k.toLowerCase().includes('ngày') || k.toLowerCase().includes('date')) { rowDate = r[k]; break; } }
-        if (rowDate) {
-            var d = new Date(rowDate);
-            if (filterFrom && d < new Date(filterFrom)) return false;
+        var rowDate = getRowDate(r);
+        if (rowDate && !isNaN(rowDate.getTime())) {
+            if (filterFrom) {
+                var fromDate = new Date(filterFrom);
+                if (rowDate < fromDate) return false;
+            }
             if (filterTo) {
-                var dTo = new Date(filterTo); dTo.setHours(23, 59, 59, 999);
-                if (d > dTo) return false;
+                var toDate = new Date(filterTo);
+                toDate.setHours(23, 59, 59, 999);
+                if (rowDate > toDate) return false;
             }
         }
 
         return true;
     });
 
-    if (activeData.length === 0) { tb.innerHTML = '<tr><td colspan="100%" class="text-center p-5 text-muted fst-italic">Không có dữ liệu hiển thị</td></tr>'; return; }
+    var skip = COLUMNS_HIDDEN;
 
-    var keys = Object.keys(activeData[0]);
-    var skip = ['Delete', 'Update', 'App_pass', 'Who delete', 'Path file', 'file path'];
+    if (activeData.length === 0) {
+        th.innerHTML = '<tr><th class="bg-success text-white">Thông tin</th></tr>';
+        tb.innerHTML = '<tr><td class="text-center p-5 text-muted fst-italic">Không có dữ liệu hiển thị</td></tr>';
+        return;
+    }
+
+    // Lấy đủ cột từ tất cả dòng (tránh thiếu cột nếu dòng đầu không đủ)
+    var keys = [];
+    activeData.forEach(function (r) {
+        Object.keys(r).forEach(function (k) {
+            if (!skip.includes(k) && keys.indexOf(k) === -1) keys.push(k);
+        });
+    });
+    if (keys.length === 0) keys = Object.keys(activeData[0] || {}).filter(function (k) { return !skip.includes(k); });
+
     var trH = document.createElement('tr');
-    keys.forEach(k => { if (!skip.includes(k)) { var t = document.createElement('th'); t.innerText = COLUMN_MAP[k] || k; trH.appendChild(t); } });
+    keys.forEach(k => { var t = document.createElement('th'); t.innerText = COLUMN_MAP[k] || k; trH.appendChild(t); });
     trH.appendChild(document.createElement('th'));
     th.appendChild(trH);
 
@@ -676,10 +1569,21 @@ function renderTable(data) {
         tr.style.cursor = 'pointer';
         keys.forEach(k => {
             if (!skip.includes(k)) {
-                var td = document.createElement('td'); var v = r[k];
+                var td = document.createElement('td');
+                var v = r[k];
+
+                // Resolve foreign key trước tiên
+                v = resolveForeignKey(k, v);
+
                 if (k.toUpperCase().includes('NGAY') || k.toUpperCase().includes('DATE')) v = formatSafeDate(v);
-                if ((k.toUpperCase().includes('GIA') || k.toUpperCase().includes('TIEN')) && !isNaN(v) && v !== '') { v = Number(v).toLocaleString('vi-VN'); td.className = 'text-end fw-bold text-success'; }
-                td.innerText = v || ''; tr.appendChild(td);
+                if (isImageColumnKey(k) && typeof v === 'string' && v.trim() && (v.startsWith('http://') || v.startsWith('https://'))) {
+                    td.innerHTML = '<img src="' + String(v).replace(/"/g, '&quot;') + '" class="table-cell-img" alt="" style="max-height:36px;max-width:48px;object-fit:cover;border-radius:4px;">';
+                } else if ((k.toUpperCase().includes('GIA') || k.toUpperCase().includes('TIEN')) && !isNaN(v) && v !== '') {
+                    v = Number(v).toLocaleString('vi-VN'); td.className = 'text-end fw-bold text-success'; td.innerText = v;
+                } else {
+                    td.innerText = v || '';
+                }
+                tr.appendChild(td);
             }
         });
 
@@ -707,15 +1611,16 @@ function formatSafeDate(d) {
     return d;
 }
 
+function isImageColumnKey(key) {
+    if (!key || typeof key !== 'string') return false;
+    var k = key.toLowerCase().replace(/\s/g, '');
+    return /anh|hinh|image|photo|ảnh|hình|avatar/.test(k) || key.indexOf('Hình ảnh') !== -1 || key.indexOf('Ảnh cá nhân') !== -1;
+}
+
 // --- UTILS ---
-window.debounceSearch = function () {
-    if (FILTER_TIMER) clearTimeout(FILTER_TIMER);
-    FILTER_TIMER = setTimeout(() => {
-        var key = document.getElementById('search-box').value.toLowerCase();
-        var raw = GLOBAL_DATA[CURRENT_SHEET] || [];
-        var filtered = raw.filter(r => Object.values(r).join(' ').toLowerCase().includes(key));
-        renderTable(filtered);
-    }, 300);
+/** Lọc tức thì (không debounce): renderTable đọc main-search trong filter-bar */
+window.applyFilterInstant = function () {
+    renderTable(GLOBAL_DATA[CURRENT_SHEET] || []);
 }
 
 function showLoading(s, text) {
@@ -748,29 +1653,96 @@ function renderSidebar() {
 
 window.openAddModal = function () { EDIT_INDEX = -1; document.getElementById('modalTitle').innerText = 'Thêm Mới'; buildForm(CURRENT_SHEET, null); new bootstrap.Modal(document.getElementById('dataModal')).show(); }
 
-window.openEditModal = function (i) { EDIT_INDEX = i; document.getElementById('modalTitle').innerText = 'Cập Nhật'; var d = (GLOBAL_DATA[CURRENT_SHEET] || [])[i]; buildForm(CURRENT_SHEET, d); new bootstrap.Modal(document.getElementById('dataModal')).show(); }
+window.openEditModal = function (i, sheetOpt) {
+    var sheet = sheetOpt || CURRENT_SHEET;
+    // Nếu sửa bản ghi con (sheet khác CURRENT_SHEET), lưu sheet cha để khôi phục sau
+    if (sheet !== CURRENT_SHEET) {
+        window.SHEET_BEFORE_ADD = CURRENT_SHEET;
+        CURRENT_SHEET = sheet;
+    }
+    EDIT_INDEX = i;
+    document.getElementById('modalTitle').innerText = 'Cập Nhật';
+    var d = (GLOBAL_DATA[sheet] || [])[i];
+    buildForm(sheet, d);
+    new bootstrap.Modal(document.getElementById('dataModal')).show();
+}
 
 function buildForm(s, d) {
     var f = document.getElementById('dynamic-form'); f.innerHTML = '';
     var smp = GLOBAL_DATA[s]?.[0] || (GLOBAL_DATA[s] && GLOBAL_DATA[s].length > 0 ? GLOBAL_DATA[s][0] : {});
     if (Object.keys(smp).length === 0) { f.innerHTML = '<div class="alert alert-warning">Chưa có dữ liệu mẫu.</div>'; return; }
-    var skip = ['Delete', 'Update', 'App_pass'];
+    var skip = COLUMNS_HIDDEN;
     Object.keys(smp).forEach(k => {
         if (skip.includes(k)) return;
-        var v = d ? d[k] : '';
+        var v = d ? (d[k] != null ? d[k] : '') : '';
         if (d && (k.includes('Ngay') || k.includes('Date'))) {
             try { v = new Date(v).toISOString().split('T')[0]; } catch (e) { v = ''; }
         }
         var div = document.createElement('div');
         div.className = 'col-md-6';
-        div.innerHTML = `<label class="form-label small fw-bold text-muted">${COLUMN_MAP[k] || k}</label><input class="form-control rounded-3" name="${k}" value="${v}" ${k.includes('Ngay') ? 'type="date"' : ''}>`;
+        var drop = getDropdownForField(s, k);
+        var fkMapping = FK_MAPPING[k];
+
+        // Check DROPDOWN_CONFIG first, then FK_MAPPING
+        if (drop && GLOBAL_DATA[drop.table]) {
+            var opts = (GLOBAL_DATA[drop.table] || []).filter(function (row) { return row['Delete'] !== 'X'; });
+            var labelKey = drop.labelKey;
+            var valueKey = drop.valueKey;
+            var optionsHtml = '<option value="">-- Chọn --</option>';
+            opts.forEach(function (row) {
+                var val = row[valueKey] != null ? String(row[valueKey]) : '';
+                var lbl = (row[labelKey] != null ? row[labelKey] : row['Tên kho'] || row['Ten_Kho'] || row['Tên vật tư'] || row['Họ và tên'] || row['Tên nhóm'] || row['Tên đối tác'] || val);
+                optionsHtml += '<option value="' + String(val).replace(/"/g, '&quot;') + '"' + (val === String(v) ? ' selected' : '') + '>' + String(lbl).replace(/</g, '&lt;') + '</option>';
+            });
+            div.innerHTML = '<label class="form-label small fw-bold text-muted">' + (COLUMN_MAP[k] || k) + '</label><select class="form-select rounded-3" name="' + k + '">' + optionsHtml + '</select>';
+        } else if (fkMapping && GLOBAL_DATA[fkMapping.table]) {
+            // Use FK_MAPPING to create dropdown
+            var opts = (GLOBAL_DATA[fkMapping.table] || []).filter(function (row) { return row['Delete'] !== 'X'; });
+
+            // Filter by condition if this is a Drop table entry (more robust matching)
+            if (fkMapping.condition) {
+                var targetCondition = String(fkMapping.condition).toLowerCase().trim();
+                opts = opts.filter(function(row) {
+                    var rowCondition = String(row['condition'] || row['Condition'] || '').toLowerCase().trim();
+                    return rowCondition === targetCondition;
+                });
+            }
+
+            var labelKey = fkMapping.display;
+            var valueKey = fkMapping.key;
+            var optionsHtml = '<option value="">-- Chọn --</option>';
+
+            opts.forEach(function (row) {
+                // Handle key variations for different tables
+                var val = null;
+                if (fkMapping.table === 'DS_kho') {
+                    val = row[valueKey] || row['ID kho'] || row['Id_kho'] || row['id_kho'] || row['IDKho'] || row['Idkho'];
+                } else if (fkMapping.table === 'Vat_tu') {
+                    val = row[valueKey] || row['ID vật tư'] || row['Id_vat_tu'] || row['id_vat_tu'] || row['MaVatTu'];
+                } else if (fkMapping.table === 'Drop') {
+                    val = row[valueKey] || row['id'] || row['ID'] || row['Id'];
+                } else {
+                    val = row[valueKey];
+                }
+
+                if (val != null) {
+                    val = String(val);
+                    var lbl = row[labelKey] != null ? row[labelKey] : val;
+                    optionsHtml += '<option value="' + val.replace(/"/g, '&quot;') + '"' + (val === String(v) ? ' selected' : '') + '>' + String(lbl).replace(/</g, '&lt;') + '</option>';
+                }
+            });
+
+            div.innerHTML = '<label class="form-label small fw-bold text-muted">' + (COLUMN_MAP[k] || k) + '</label><select class="form-select rounded-3" name="' + k + '">' + optionsHtml + '</select>';
+        } else {
+            div.innerHTML = '<label class="form-label small fw-bold text-muted">' + (COLUMN_MAP[k] || k) + '</label><input class="form-control rounded-3" name="' + k + '" value="' + String(v).replace(/"/g, '&quot;') + '" ' + (k.includes('Ngay') ? 'type="date"' : '') + '>';
+        }
         f.appendChild(div);
     });
 }
 
 window.submitData = function () {
     var f = document.getElementById('dynamic-form'); var fd = {};
-    f.querySelectorAll('input').forEach(i => fd[i.name] = i.value);
+    f.querySelectorAll('input, select').forEach(function (el) { fd[el.name] = el.value; });
     if (!fd['NguoiLap'] && CURRENT_USER) fd['NguoiLap'] = CURRENT_USER.name;
     showLoading(true);
     bootstrap.Modal.getInstance(document.getElementById('dataModal')).hide();
@@ -829,6 +1801,153 @@ window.deleteRow = function (i, sheet) {
     });
 }
 
+// --- MỞ CHI TIẾT BẢN GHI CON ---
+window.openChildDetailPopup = function(sheet, idx) {
+    Swal.close();
+    setTimeout(function() {
+        showRowDetail(null, sheet, idx);
+    }, 100);
+}
+
+// Mapping config: định nghĩa cách resolve foreign keys
+const FK_MAPPING = {
+    'Người lập': { table: 'User', key: 'ID', display: 'Họ và tên' },
+    'Nguoilap': { table: 'User', key: 'ID', display: 'Họ và tên' },
+    'NguoiLap': { table: 'User', key: 'ID', display: 'Họ và tên' },
+    'ID kho': { table: 'DS_kho', key: 'ID_kho', display: 'Tên kho' },
+    'ID_kho': { table: 'DS_kho', key: 'ID_kho', display: 'Tên kho' },
+    'Tên kho': { table: 'DS_kho', key: 'ID_kho', display: 'Tên kho' },
+    'Ten_Kho': { table: 'DS_kho', key: 'ID_kho', display: 'Tên kho' },
+    'Ten_kho': { table: 'DS_kho', key: 'ID_kho', display: 'Tên kho' },
+    'Tên Kho': { table: 'DS_kho', key: 'ID_kho', display: 'Tên kho' },
+    'KhoDi': { table: 'DS_kho', key: 'ID_kho', display: 'Tên kho' },
+    'KhoDen': { table: 'DS_kho', key: 'ID_kho', display: 'Tên kho' },
+    'Kho nguồn': { table: 'DS_kho', key: 'ID_kho', display: 'Tên kho' },
+    'Kho đích': { table: 'DS_kho', key: 'ID_kho', display: 'Tên kho' },
+    'ID vật tư': { table: 'Vat_tu', key: 'ID vật tư', display: 'Tên vật tư' },
+    'MaVatTu': { table: 'Vat_tu', key: 'ID vật tư', display: 'Tên vật tư' },
+    'Mã vật tư': { table: 'Vat_tu', key: 'ID vật tư', display: 'Tên vật tư' },
+    'Loại chi phí': { table: 'Drop', key: 'id', display: 'label', condition: 'Loaichiphi' },
+    'Loaichiphi': { table: 'Drop', key: 'id', display: 'label', condition: 'Loaichiphi' },
+    'LoaiChiPhi': { table: 'Drop', key: 'id', display: 'label', condition: 'Loaichiphi' },
+    'Loai_chi_phi': { table: 'Drop', key: 'id', display: 'label', condition: 'Loaichiphi' },
+    'DonViTinh': { table: 'Drop', key: 'id', display: 'label', condition: 'Đơn vị tính' },
+    'Đơn vị tính': { table: 'Drop', key: 'id', display: 'label', condition: 'Đơn vị tính' },
+    'Don_vi_tinh': { table: 'Drop', key: 'id', display: 'label', condition: 'Đơn vị tính' },
+    'ID_NhanVien': { table: 'User', key: 'ID', display: 'Họ và tên' },
+    'Người nhập': { table: 'User', key: 'Họ và tên', display: 'Họ và tên' },
+    'Người xuất': { table: 'User', key: 'Họ và tên', display: 'Họ và tên' },
+    'Người chuyển': { table: 'User', key: 'Họ và tên', display: 'Họ và tên' },
+    'Người nhận': { table: 'User', key: 'Họ và tên', display: 'Họ và tên' },
+
+    // Các trường từ Drop table
+    'Chức vụ': { table: 'Drop', key: 'id', display: 'label', condition: 'Chức vụ' },
+    'ChucVu': { table: 'Drop', key: 'id', display: 'label', condition: 'Chức vụ' },
+    'Chuc_vu': { table: 'Drop', key: 'id', display: 'label', condition: 'Chức vụ' },
+
+    'Phê duyệt': { table: 'Drop', key: 'id', display: 'label', condition: 'Phê duyệt' },
+    'PheDuyet': { table: 'Drop', key: 'id', display: 'label', condition: 'Phê duyệt' },
+    'Phe_duyet': { table: 'Drop', key: 'id', display: 'label', condition: 'Phê duyệt' },
+
+    'Loại nhập xuất': { table: 'Drop', key: 'id', display: 'label', condition: 'Loại nhập xuất' },
+    'LoaiNhapXuat': { table: 'Drop', key: 'id', display: 'label', condition: 'Loại nhập xuất' },
+    'Loai_nhap_xuat': { table: 'Drop', key: 'id', display: 'label', condition: 'Loại nhập xuất' },
+
+    'Bộ phận': { table: 'Drop', key: 'id', display: 'label', condition: 'Bộ phận' },
+    'BoPhan': { table: 'Drop', key: 'id', display: 'label', condition: 'Bộ phận' },
+    'Bo_phan': { table: 'Drop', key: 'id', display: 'label', condition: 'Bộ phận' },
+
+    'Trạng thái': { table: 'Drop', key: 'id', display: 'label', condition: 'Trạng thái' },
+    'TrangThai': { table: 'Drop', key: 'id', display: 'label', condition: 'Trạng thái' },
+    'Trang_thai': { table: 'Drop', key: 'id', display: 'label', condition: 'Trạng thái' },
+
+    'Phân quyền': { table: 'Drop', key: 'id', display: 'label', condition: 'Phân quyền' },
+    'PhanQuyen': { table: 'Drop', key: 'id', display: 'label', condition: 'Phân quyền' },
+    'Phan_quyen': { table: 'Drop', key: 'id', display: 'label', condition: 'Phân quyền' },
+
+    'Nhóm vật liệu': { table: 'Drop', key: 'id', display: 'label', condition: 'Nhóm vật liệu' },
+    'NhomVatLieu': { table: 'Drop', key: 'id', display: 'label', condition: 'Nhóm vật liệu' },
+    'Nhom_vat_lieu': { table: 'Drop', key: 'id', display: 'label', condition: 'Nhóm vật liệu' },
+
+    'Trạng thái chuyển kho': { table: 'Drop', key: 'id', display: 'label', condition: 'Trạng thái chuyển kho' },
+    'TrangThaiChuyenKho': { table: 'Drop', key: 'id', display: 'label', condition: 'Trạng thái chuyển kho' },
+    'Trang_thai_chuyen_kho': { table: 'Drop', key: 'id', display: 'label', condition: 'Trạng thái chuyển kho' },
+
+    'Loại giao dịch': { table: 'Drop', key: 'id', display: 'label', condition: 'LoaiGiaoDich' },
+    'LoaiGiaoDich': { table: 'Drop', key: 'id', display: 'label', condition: 'LoaiGiaoDich' },
+    'Loai_giao_dich': { table: 'Drop', key: 'id', display: 'label', condition: 'LoaiGiaoDich' },
+
+    'Thời gian': { table: 'Drop', key: 'id', display: 'label', condition: 'Thoigian' },
+    'ThoiGian': { table: 'Drop', key: 'id', display: 'label', condition: 'Thoigian' },
+    'Thoi_gian': { table: 'Drop', key: 'id', display: 'label', condition: 'Thoigian' },
+
+    'Thời tiết': { table: 'Drop', key: 'id', display: 'label', condition: 'Thoitiet' },
+    'ThoiTiet': { table: 'Drop', key: 'id', display: 'label', condition: 'Thoitiet' },
+    'Thoi_tiet': { table: 'Drop', key: 'id', display: 'label', condition: 'Thoitiet' }
+};
+
+// Function để resolve foreign key thành tên hiển thị
+function resolveForeignKey(columnName, value) {
+    if (!value || value === '') return value;
+
+    var mapping = FK_MAPPING[columnName];
+    if (!mapping) return value;
+
+    var targetTable = GLOBAL_DATA[mapping.table] || [];
+    if (targetTable.length === 0) return value;
+
+    // Nếu có condition (ví dụ: Drop table với Loaichiphi) - case-insensitive matching
+    if (mapping.condition) {
+        var targetCondition = String(mapping.condition).toLowerCase().trim();
+        targetTable = targetTable.filter(item => {
+            var itemCondition = String(item['condition'] || item['Condition'] || '').toLowerCase().trim();
+            return itemCondition === targetCondition;
+        });
+    }
+
+    // Tìm record matching - thử nhiều variation của key
+    var keyVariations = [mapping.key];
+    if (mapping.table === 'DS_kho') {
+        keyVariations.push('ID kho', 'Id_kho', 'id_kho', 'IDKho', 'Idkho');
+    }
+    if (mapping.table === 'Vat_tu') {
+        keyVariations.push('ID vật tư', 'Id_vat_tu', 'id_vat_tu', 'MaVatTu');
+    }
+    if (mapping.table === 'Drop') {
+        keyVariations.push('id', 'ID', 'Id');
+    }
+
+    var found = null;
+    for (var i = 0; i < keyVariations.length && !found; i++) {
+        found = targetTable.find(item => String(item[keyVariations[i]]) === String(value));
+    }
+
+    // Nếu không tìm thấy với key chính, thử với display field (case đã là tên rồi)
+    if (!found) {
+        found = targetTable.find(item => String(item[mapping.display]) === String(value));
+        if (found) return value; // Đã là tên rồi, giữ nguyên
+    }
+
+    // Nếu tìm thấy, trả về display value
+    if (found && found[mapping.display]) {
+        return found[mapping.display];
+    }
+
+    // Thử tìm với các variation của tên cột (Tên kho, Ten_Kho, Tên Kho)
+    if (!found && mapping.table === 'DS_kho') {
+        var variations = ['Tên kho', 'Ten_Kho', 'Tên Kho'];
+        for (var i = 0; i < variations.length; i++) {
+            found = targetTable.find(item => String(item[variations[i]]) === String(value));
+            if (found) {
+                var displayValue = found[mapping.display] || found[variations[i]];
+                if (displayValue) return displayValue;
+            }
+        }
+    }
+
+    return value; // Trả về giá trị gốc nếu không tìm thấy
+}
+
 function showRowDetail(r, s, idx) {
     if (!r && idx !== -1) r = (GLOBAL_DATA[s] || [])[idx];
     if (!r) return;
@@ -836,25 +1955,33 @@ function showRowDetail(r, s, idx) {
     var menuTitle = 'bản ghi';
     MENU_STRUCTURE.forEach(g => { var f = g.items.find(x => x.sheet == s); if (f) menuTitle = f.title; });
 
-    var html = '<div class="row text-start" style="font-size:12px !important; max-height: 400px; overflow-y: auto; overflow-x: hidden; padding: 15px; background: #fdfdfd; border-radius: 12px;">';
-    var skip = ['Delete', 'Update', 'App_pass', 'Who delete', 'ID_Phieu', 'ID phieu nhap', 'ID phieu Xuat', 'ID Chkho', 'Path file', 'file path'];
+    var html = '<div class="row text-start detail-scroll-wrap" style="font-size:12px !important; max-height: 400px; overflow-y: auto; overflow-x: auto; padding: 15px; background: #fdfdfd; border-radius: 12px;">';
+    var skip = COLUMNS_HIDDEN.concat(['ID_Phieu', 'ID phieu nhap', 'ID phieu Xuat', 'ID Chkho']);
     for (var k in r) {
         if (!skip.includes(k) && r[k]) {
             var val = r[k] || '';
-            if (k.toUpperCase().includes('NGAY') || k.toUpperCase().includes('DATE')) val = formatSafeDate(val);
 
-            var displayVal = val;
+            // Resolve foreign key trước tiên
+            var resolvedVal = resolveForeignKey(k, val);
+
+            if (k.toUpperCase().includes('NGAY') || k.toUpperCase().includes('DATE')) resolvedVal = formatSafeDate(resolvedVal);
+
+            var displayVal = resolvedVal;
             if (typeof val === 'string' && (val.startsWith('http') || val.startsWith('https'))) {
-                if (k.toLowerCase().includes('hình ảnh') || val.match(/\.(jpeg|jpg|gif|png)$/i)) {
-                    displayVal = `<div class="mt-1"><img src="${val}" style="max-height:180px; max-width:100%; border-radius:8px; cursor:zoom-in; border: 2px solid #fff; shadow: 0 4px 6px rgba(0,0,0,0.1)" onclick="window.open('${val}')"></div>`;
+                if (isImageColumnKey(k) || val.match(/\.(jpeg|jpg|gif|png|webp)(\?|$)/i)) {
+                    displayVal = `<div class="mt-1"><img src="${val.replace(/"/g, '&quot;')}" style="max-height:180px; max-width:100%; border-radius:8px; cursor:zoom-in; border: 2px solid #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.1)" onclick="window.open(this.src)"></div>`;
                 } else {
-                    displayVal = `<a href="${val}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2 mt-1" style="font-size:10px">Mở tài liệu <i class="fas fa-external-link-alt ms-1"></i></a>`;
+                    displayVal = `<a href="${val.replace(/"/g, '&quot;')}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2 mt-1" style="font-size:10px">Mở tài liệu <i class="fas fa-external-link-alt ms-1"></i></a>`;
                 }
-            } else if (!isNaN(val) && val !== '' && (k.toLowerCase().includes('tiền') || k.toLowerCase().includes('giá') || k.toLowerCase().includes('thành'))) {
-                displayVal = `<span class="text-success fw-bold">${Number(val).toLocaleString('vi-VN')}</span>`;
+            } else if (!isNaN(resolvedVal) && resolvedVal !== '' && (k.toLowerCase().includes('tiền') || k.toLowerCase().includes('giá') || k.toLowerCase().includes('thành') || k.toLowerCase().includes('số tiền') || k.toLowerCase().includes('tong'))) {
+                displayVal = `<span class="text-success fw-bold text-end">${Number(resolvedVal).toLocaleString('vi-VN')}</span>`;
             }
 
-            html += `<div class="col-md-4 mb-3 border-bottom pb-2"><small class="text-muted fw-bold d-block text-uppercase" style="font-size:9px; letter-spacing: 0.5px;">${COLUMN_MAP[k] || k}</small><span class="fw-medium text-dark" style="font-size:12px">${displayVal}</span></div>`;
+            var isNumField = typeof resolvedVal === 'number' || (typeof resolvedVal === 'string' && resolvedVal !== '' && !isNaN(resolvedVal) && (k.toLowerCase().includes('tiền') || k.toLowerCase().includes('giá') || k.toLowerCase().includes('thành') || k.toLowerCase().includes('số') || k.toLowerCase().includes('tong')));
+            html += `<div class="col-md-4 col-6 mb-3 border-bottom pb-2 detail-field">
+                <small class="field-label">${COLUMN_MAP[k] || k}</small>
+                <span class="field-value ${isNumField ? 'text-end' : ''}">${displayVal}</span>
+            </div>`;
         }
     }
     html += '</div>';
@@ -880,25 +2007,52 @@ function showRowDetail(r, s, idx) {
             </h6>`;
 
         if (childs.length > 0) {
-            html += `<div class="table-responsive" style="max-height: 250px; overflow-y: auto; border-radius: 8px;"><table class="table table-sm table-bordered custom-table mb-0" style="font-size:11px"><thead><tr>`;
+            html += `<div class="table-responsive child-table-scroll" style="max-height: 250px; overflow-x: auto; overflow-y: auto; border-radius: 8px;"><table class="table table-sm table-bordered custom-table mb-0 child-table-inline child-detail-table" style="font-size:11px; white-space: nowrap;"><thead class="thead-sticky child-thead-success"><tr>`;
             var ck = Object.keys(childs[0]);
-            ck.forEach(x => { if (!skip.includes(x) && x != fk) html += `<th>${COLUMN_MAP[x] || x}</th>`; });
-            html += '<th class="text-center" style="width:40px">#</th></tr></thead><tbody>';
+            ck.forEach(x => {
+                if (!skip.includes(x) && x != fk) {
+                    var isNumCol = /tiền|giá|thành|số lượng|so_luong|so_luong|don_gia|dongia|so_tien|sotien/i.test(x);
+                    html += '<th class="' + (isNumCol ? 'text-end' : 'text-start') + '">' + (COLUMN_MAP[x] || x) + '</th>';
+                }
+            });
+            html += '<th class="text-center" style="min-width: 100px;">Thao tác</th>';
+            html += '</tr></thead><tbody>';
             childs.forEach((cr) => {
                 var originalCIdx = (GLOBAL_DATA[cS] || []).indexOf(cr);
-                html += '<tr>';
+                html += '<tr class="child-row-clickable">';
                 ck.forEach(x => {
                     if (!skip.includes(x) && x != fk) {
                         var cv = cr[x] || '';
-                        if (typeof cv === 'string' && (cv.startsWith('http') || cv.startsWith('https'))) {
-                            cv = `<a href="${cv}" target="_blank" class="text-primary"><i class="fas fa-paperclip"></i></a>`;
-                        } else if (!isNaN(cv) && cv !== '' && (x.toLowerCase().includes('tiền') || x.toLowerCase().includes('giá') || x.toLowerCase().includes('thành'))) {
-                            cv = `<b>${Number(cv).toLocaleString('vi-VN')}</b>`;
+
+                        // Apply FK mapping to child table cells
+                        cv = resolveForeignKey(x, cv);
+
+                        var isNumCol = /tiền|giá|thành|số lượng|so_luong|don_gia|dongia|so_tien|sotien/i.test(x);
+                        var tdClass = isNumCol ? ' text-end' : ' text-start';
+                        if (isImageColumnKey(x) && typeof cv === 'string' && cv.trim() && (cv.startsWith('http') || cv.startsWith('https'))) {
+                            cv = `<img src="${String(cv).replace(/"/g, '&quot;')}" class="table-cell-img" alt="" style="max-height:28px;max-width:36px;object-fit:cover;border-radius:4px;">`;
+                        } else if (typeof cv === 'string' && (cv.startsWith('http') || cv.startsWith('https'))) {
+                            cv = `<a href="${cv.replace(/"/g, '&quot;')}" target="_blank" class="text-primary" onclick="event.stopPropagation()"><i class="fas fa-paperclip"></i></a>`;
+                        } else if (isNumCol && cv !== '' && cv != null && !isNaN(cv)) {
+                            cv = '<b>' + Number(cv).toLocaleString('vi-VN') + '</b>';
                         }
-                        html += `<td>${cv}</td>`;
+                        html += '<td class="' + tdClass.trim() + '">' + cv + '</td>';
                     }
                 });
-                html += `<td class="text-center"><button class="btn btn-xs btn-info py-0 px-1 shadow-sm" title="Xem chi tiết" onclick="Swal.close(); setTimeout(() => showRowDetail(null, '${cS}', ${originalCIdx}), 200);"><i class="fas fa-eye text-white" style="font-size:10px"></i></button></td>`;
+                // Thêm cột thao tác với nút Chi tiết, Sửa, Xóa
+                html += `<td class="text-center">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-xs btn-info" onclick="event.stopPropagation(); openChildDetailPopup('${cS}', ${originalCIdx});" title="Chi tiết">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-xs btn-warning" onclick="event.stopPropagation(); Swal.close(); setTimeout(() => openEditModal(${originalCIdx}, '${cS}'), 300);" title="Sửa">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-xs btn-danger" onclick="event.stopPropagation(); Swal.close(); setTimeout(() => deleteRow(${originalCIdx}, '${cS}'), 300);" title="Xóa">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>`;
                 html += '</tr>';
             });
             html += '</tbody></table></div>';
@@ -913,29 +2067,30 @@ function showRowDetail(r, s, idx) {
         html: html,
         width: '1050px',
         showCloseButton: true,
-        showCancelButton: true,
-        showDenyButton: true,
-        confirmButtonText: '<i class="fas fa-save me-1"></i> Lưu',
-        denyButtonText: '<i class="fas fa-edit me-1"></i> Sửa',
-        cancelButtonText: '<i class="fas fa-times me-1"></i> Hủy',
-        footer: `<div class="w-100 d-flex justify-content-between align-items-center">
-                    <span class="text-muted small">Mã hệ thống: ${pid || idx}</span>
-                    <button class="btn btn-sm btn-danger px-4 shadow-sm rounded-pill" onclick="Swal.close(); deleteRow(${idx}, '${s}')"><i class="fas fa-trash-alt me-1"></i> XÓA BẢN GHI NÀY</button>
+        showConfirmButton: false,
+        showDenyButton: false,
+        showCancelButton: false,
+        footer: `<div class="w-100">
+                    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <button type="button" class="btn btn-danger px-4 shadow-sm rounded-3" onclick="Swal.close(); setTimeout(() => deleteRow(${idx}, '${s}'), 200);" style="min-width: 100px;">
+                            <i class="fas fa-trash-alt me-2"></i> Xóa
+                        </button>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-warning text-dark px-4 shadow-sm rounded-3" onclick="Swal.close(); setTimeout(() => openEditModal(${idx}, '${s}'), 200);" style="min-width: 100px;">
+                                <i class="fas fa-edit me-2"></i> Sửa
+                            </button>
+                            <button type="button" class="btn btn-secondary px-4 shadow-sm rounded-3" onclick="Swal.close();" style="min-width: 100px;">
+                                <i class="fas fa-times me-2"></i> Đóng
+                            </button>
+                        </div>
+                    </div>
                  </div>`,
         customClass: {
             title: 'detail-modal-title',
             popup: 'rounded-4 shadow-lg',
-            confirmButton: 'btn btn-success rounded-pill px-4 shadow-sm',
-            denyButton: 'btn btn-warning text-dark rounded-pill px-4 ms-2 shadow-sm',
-            cancelButton: 'btn btn-light rounded-pill px-4 border ms-2'
+            footer: 'detail-modal-footer'
         },
         buttonsStyling: false
-    }).then((result) => {
-        if (result.isConfirmed) {
-            Swal.fire({ icon: 'info', title: 'Thông báo', text: 'Vui lòng nhấn nút Sửa để thay đổi dữ liệu!', timer: 1500, showConfirmButton: false });
-        } else if (result.isDenied) {
-            openEditModal(idx, s);
-        }
     });
 }
 
@@ -957,4 +2112,26 @@ window.viewProfile = function () {
     if (!CURRENT_USER) return;
     var html = `<div class="text-center mb-3"><div class="avatar-circle mx-auto bg-success text-white" style="width:80px;height:80px;font-size:2rem"><i class="fas fa-user"></i></div><h4 class="mt-2">${CURRENT_USER.name}</h4><span class="badge bg-secondary">${CURRENT_USER.role || 'Nhân viên'}</span></div>`;
     Swal.fire({ html: html, showConfirmButton: false });
+}
+
+// --- MOBILE BOTTOM NAV FUNCTIONS ---
+window.setActiveNavItem = function(element) {
+    document.querySelectorAll('.mobile-bottom-nav .nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    if (element) element.classList.add('active');
+}
+
+window.showRefreshToast = function() {
+    const Toast = Swal.mixin({
+        toast: true,
+        position: 'top',
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true
+    });
+    Toast.fire({
+        icon: 'success',
+        title: 'Đang làm mới dữ liệu...'
+    });
 }

@@ -107,13 +107,16 @@
                         </h5>
                         <div id="extra-btn-area"></div>
                     </div>
-                    <div class="card-body p-0 d-flex flex-column bg-light">
-                        <div id="filter-area" class="px-4 py-3 bg-white border-bottom"></div>
-                        <div class="table-responsive flex-grow-1 px-0">
-                            <table class="table table-hover table-striped mb-0 custom-table" id="data-table">
-                                <thead class="bg-success text-white"></thead>
-                                <tbody></tbody>
-                            </table>
+                    <div class="card-body card-body-table p-0 d-flex flex-column bg-light">
+                        <div id="filter-bar-wrap" class="flex-shrink-0"></div>
+                        <div class="table-viewport flex-grow-1 d-flex flex-column min-h-0">
+                            <div id="filter-area" class="filter-area-sticky px-3 px-md-4 py-2 py-md-3 bg-white border-bottom flex-shrink-0"></div>
+                            <div class="table-responsive table-scroll flex-grow-1 min-h-0">
+                                <table class="table table-hover table-striped mb-0 custom-table" id="data-table">
+                                    <thead class="bg-success text-white thead-sticky"></thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -123,6 +126,14 @@
         <footer class="footer-bar">
             <span>Hệ thống quản lý Con Đường Xanh CDX &copy; 2025</span>
         </footer>
+
+        <!-- Mobile Bottom Navigation -->
+        <nav class="mobile-bottom-nav d-md-none">
+            <button class="nav-item active" onclick="switchTab('dashboard', this); setActiveNavItem(this)">
+                <i class="fas fa-home"></i>
+                <span>Trang chủ</span>
+            </button>
+        </nav>
     </div>
 
     <div class="modal fade" id="dataModal" tabindex="-1" data-bs-backdrop="static">

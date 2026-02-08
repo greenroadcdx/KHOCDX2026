@@ -5,6 +5,7 @@
     --text-dark: #37474F;
     --sidebar-width: 260px;
     --navbar-height: 60px;
+    --filter-area-height: 52px;
 }
 
 body {
@@ -105,6 +106,19 @@ h6,
     background-color: var(--primary-color) !important;
 }
 
+.main-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.main-content .content-tab:not(.d-none) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 /* --- SIDEBAR --- */
 @media (min-width: 992px) {
     .offcanvas-start {
@@ -123,22 +137,26 @@ h6,
 
     .main-content {
         margin-left: var(--sidebar-width) !important;
-        padding: 15px;
+        padding: 10px 12px;
         margin-top: var(--navbar-height);
         min-height: calc(100vh - var(--navbar-height));
-        /* height: calc(100vh - var(--navbar-height)); Removed to allow body scroll */
-        /* overflow-y: auto; Removed inner scroll */
         display: flex;
         flex-direction: column;
     }
 
     .table-responsive {
         flex: 1;
-        overflow: visible;
-        /* Allow table to expand */
         border-radius: 8px;
         border: 1px solid #eee;
         background: white;
+    }
+
+    .table-scroll {
+        overflow: auto !important;
+    }
+
+    #tab-generic .card-header {
+        padding: 8px 12px;
     }
 
     body.sidebar-closed .offcanvas-start {
@@ -196,14 +214,14 @@ h6,
 
 /* --- DASHBOARD PREMIUM --- */
 .dashboard-container {
-    padding-bottom: 40px;
+    padding-bottom: 24px;
 }
 
 .kpi-card-premium {
     background: white;
-    border-radius: 20px;
-    padding: 24px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
     border: 1px solid rgba(0, 0, 0, 0.03);
     display: flex;
     align-items: center;
@@ -263,14 +281,14 @@ h6,
 
 .menu-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
 }
 
 .menu-card-modern {
     background: white;
-    border-radius: 16px;
-    padding: 25px 15px;
+    border-radius: 12px;
+    padding: 14px 12px;
     text-align: center;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
     border: 1px solid #F1F1F1;
@@ -311,10 +329,85 @@ h6,
     color: var(--text-dark);
 }
 
-/* --- TABLE --- */
+/* --- TABLE VIEWPORT: bảng mở rộng hết màn hình phía dưới --- */
+#tab-generic {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#tab-generic .card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.card-body-table {
+    overflow: hidden;
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.table-viewport {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    flex: 1;
+}
+
+.filter-area-sticky {
+    flex-shrink: 0;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* --- BỘ LỌC: MỘT HÀNG TRÊN PC --- */
+.filter-bar-block {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 10px 12px !important;
+}
+
+.filter-bar-block .filter-item {
+    min-width: 0;
+}
+
+/* PC: tất cả filter 1 hàng */
+@media (min-width: 992px) {
+    .filter-bar-block {
+        flex-wrap: nowrap;
+        gap: 1rem;
+    }
+    .filter-bar-block .filter-item {
+        flex: 0 0 auto;
+        width: 140px;
+    }
+    .filter-bar-block .filter-item-search {
+        flex: 1;
+        min-width: 200px;
+        max-width: 320px;
+    }
+}
+
+/* Vùng cuộn duy nhất = table-scroll → chiếm hết phần còn lại phía dưới */
+.table-scroll {
+    flex: 1 1 0;
+    min-height: 120px;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* --- TABLE: cho phép thanh trượt ngang --- */
 .table-responsive {
     overflow-x: auto !important;
     overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
 }
 
 .custom-table {
@@ -323,15 +416,60 @@ h6,
     border-spacing: 0;
 }
 
-.custom-table thead th {
-    background-color: var(--primary-color);
-    color: white;
-    font-weight: 600;
-    padding: 8px 12px;
+/* Bảng con trong chi tiết: 1 hàng mỗi bản ghi, có thể trượt ngang */
+.child-table-scroll {
+    -webkit-overflow-scrolling: touch;
+}
+
+.child-table-inline {
     white-space: nowrap;
+}
+
+/* Tiêu đề bảng con: đóng băng, nền xanh lá, chữ trắng */
+.child-detail-table.child-table-inline thead.child-thead-success th,
+.child-table-scroll .child-thead-success th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    font-weight: 600;
+    padding: 6px 10px;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.child-row-clickable:hover {
+    background-color: rgba(46, 125, 50, 0.08);
+}
+
+.child-detail-table th:last-child,
+.child-detail-table td:last-child {
+    position: relative;
+    right: auto;
+    box-shadow: none;
+}
+
+/* Footer modal chi tiết: nút cùng hàng */
+.detail-modal-footer {
+    flex-wrap: nowrap;
+}
+
+.table-cell-img {
+    vertical-align: middle;
+}
+
+/* Đóng băng tiêu đề: cuộn trong .table-scroll nên thead sticky top 0 */
+.custom-table thead.thead-sticky th {
     position: sticky;
     top: 0;
     z-index: 20;
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 600;
+    padding: 6px 10px;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 /* Sticky Action Column (Right) */
@@ -351,7 +489,7 @@ h6,
 }
 
 .custom-table td {
-    padding: 6px 12px;
+    padding: 5px 10px;
     vertical-align: middle;
     border-bottom: 1px solid #F1F1F1;
     white-space: nowrap;
@@ -420,6 +558,7 @@ h6,
 @media (max-width: 768px) {
     :root {
         --navbar-height: 50px;
+        --filter-area-height: 44px;
     }
 
     body {
@@ -427,90 +566,191 @@ h6,
     }
 
     .main-content {
-        padding: 10px;
+        padding: 4px;
         margin-top: var(--navbar-height);
-        height: calc(100vh - var(--navbar-height));
+        min-height: calc(100vh - var(--navbar-height) - 40px);
         overflow-y: auto !important;
-    }
-
-    /* KPI Cards compact - Single Row */
-    .dashboard-container .row.g-3.mb-4 {
         display: flex;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        padding-bottom: 10px;
-        -webkit-overflow-scrolling: touch;
-        gap: 10px !important;
+        flex-direction: column;
+        padding-bottom: 55px;
     }
 
-    .dashboard-container .row.g-3.mb-4>div {
-        flex: 0 0 auto;
-        width: 150px;
-        /* Cố định chiều rộng để cuộn ngang */
+    /* KPI: 4 ô 1 hàng trên 1 màn hình, không trượt ngang, hiển thị đầy đủ */
+    .dashboard-container .kpi-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 4px;
+        overflow: visible;
+        padding-bottom: 0;
+        margin-left: 0;
+        margin-right: 0;
     }
 
-    .kpi-card-premium {
-        padding: 10px;
-        border-radius: 12px;
+    .dashboard-container .kpi-row > .kpi-col {
+        flex: none;
+        width: auto;
+        max-width: none;
+        min-width: 0;
+    }
+
+    .dashboard-container .kpi-card-premium {
+        padding: 4px 2px;
+        border-radius: 8px;
         height: 100%;
         margin-bottom: 0 !important;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        min-height: 56px;
     }
 
-    .kpi-value {
+    .dashboard-container .kpi-card-premium .kpi-content {
+        order: 2;
+        width: 100%;
+    }
+
+    .dashboard-container .kpi-card-premium .kpi-icon-wrap {
+        order: 1;
+        width: 24px;
+        height: 24px;
+        font-size: 0.7rem;
+        border-radius: 6px;
+        margin-bottom: 4px;
+    }
+
+    .dashboard-container .kpi-label {
+        font-size: 9px;
+        margin-bottom: 1px;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-transform: none !important;
+        font-weight: 600;
+    }
+
+    .dashboard-container .kpi-value {
         font-size: 18px;
-    }
-
-    .kpi-icon-wrap {
-        width: 35px;
-        height: 35px;
-        font-size: 1rem;
-        border-radius: 8px;
-    }
-
-    .kpi-label {
-        font-size: 8px;
-        margin-bottom: 2px;
+        font-weight: 800;
+        line-height: 1.2;
     }
 
     /* Menu Grid compact */
     .menu-grid {
         grid-template-columns: repeat(3, 1fr);
-        /* 3 cột để tiết kiệm không gian */
-        gap: 8px;
+        gap: 4px;
     }
 
     .menu-card-modern {
-        padding: 12px 5px;
-        border-radius: 10px;
+        padding: 8px 4px;
+        border-radius: 8px;
     }
 
     .menu-card-modern i {
-        font-size: 1.4rem;
-        width: 40px;
-        height: 40px;
-        line-height: 40px;
-        margin-bottom: 8px;
+        font-size: 1.2rem;
+        width: 36px;
+        height: 36px;
+        line-height: 36px;
+        margin-bottom: 4px;
     }
 
     .menu-card-modern span {
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 500;
         line-height: 1.2;
     }
 
-    /* Filter bar optimization */
-    #filter-bar {
-        padding: 8px !important;
-        margin-bottom: 10px !important;
+    /* Bộ lọc */
+    .filter-area-sticky {
+        padding: 6px 10px !important;
     }
 
-    #filter-bar .row>div {
-        margin-bottom: 5px;
+    .filter-area-sticky .input-group-search .form-control,
+    .filter-area-sticky .input-group-search .input-group-text {
+        font-size: 11px;
+        padding: 4px 8px;
+        min-height: 30px;
     }
 
-    #filter-bar label {
-        display: none;
-        /* Ẩn label để tiết kiệm chỗ */
+    .filter-bar-block {
+        padding: 4px 6px !important;
+        margin: 0 0 4px 0 !important;
+        border-radius: 10px;
+        flex-wrap: wrap;
+    }
+
+    .filter-bar-block .filter-item {
+        flex: 1 1 45%;
+        min-width: 120px;
+    }
+
+    .filter-bar-block .filter-item-search {
+        flex: 1 1 100%;
+        min-width: 0;
+        max-width: none;
+    }
+
+    .filter-bar-block label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #78909C;
+        margin-bottom: 1px;
+    }
+
+    .filter-bar-block .form-control,
+    .filter-bar-block .form-select,
+    .filter-bar-block .form-control-sm,
+    .filter-bar-block .form-select-sm {
+        font-size: 11px;
+        padding: 3px 5px;
+        min-height: 26px;
+    }
+
+    .filter-bar-block .input-group-sm .input-group-text,
+    .filter-bar-block .input-group-sm .form-control {
+        padding: 3px 5px;
+        min-height: 26px;
+        font-size: 11px;
+    }
+
+    /* Bảng: cỡ chữ 11px, hàng cách hàng tự nhiên (không dãn cách lớn) */
+    .card-body-table {
+        border-radius: 0 0 1rem 1rem;
+    }
+
+    .table-viewport {
+        border-radius: 0 0 12px 12px;
+    }
+
+    .custom-table {
+        font-size: 11px !important;
+        line-height: 1.35;
+    }
+
+    .custom-table thead.thead-sticky th {
+        padding: 5px 8px;
+        font-size: 11px;
+    }
+
+    .custom-table td {
+        padding: 5px 8px;
+        line-height: 1.35;
+    }
+
+    .custom-table tbody tr {
+        border-spacing: 0;
+    }
+
+    .custom-table th:last-child,
+    .custom-table td:last-child {
+        min-width: 70px;
+    }
+
+    .card-header .fw-bold,
+    #page-title {
+        font-size: 11px !important;
     }
 
     .navbar-brand img {
@@ -520,4 +760,566 @@ h6,
     .navbar-brand span {
         font-size: 14px !important;
     }
+
+    /* === TỐI ƯU MOBILE === */
+
+    /* Bảng chấm công trên mobile */
+    #data-table.attendance-table caption {
+        font-size: 11px !important;
+        padding: 8px !important;
+    }
+
+    #data-table.attendance-table th {
+        padding: 6px 3px !important;
+        font-size: 10px !important;
+        min-width: 45px !important;
+    }
+
+    #data-table.attendance-table thead th:first-child {
+        min-width: 60px !important;
+    }
+
+    #data-table.attendance-table thead th:nth-child(2) {
+        left: 60px !important;
+        min-width: 100px !important;
+    }
+
+    #data-table.attendance-table thead th:nth-child(3) {
+        left: 160px !important;
+        min-width: 70px !important;
+    }
+
+    #data-table.attendance-table thead th:nth-child(4) {
+        left: 230px !important;
+        min-width: 70px !important;
+    }
+
+    #data-table.attendance-table tbody tr td:nth-child(2) {
+        left: 60px !important;
+    }
+
+    #data-table.attendance-table tbody tr td:nth-child(3) {
+        left: 160px !important;
+    }
+
+    #data-table.attendance-table tbody tr td:nth-child(4) {
+        left: 230px !important;
+    }
+
+    #data-table.attendance-table td {
+        padding: 6px 3px !important;
+        font-size: 10px !important;
+    }
+
+    /* Filter area cho attendance trên mobile */
+    #filter-area {
+        padding: 8px 10px !important;
+    }
+
+    #filter-area .d-flex {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    #filter-area .d-flex > div {
+        flex: 1 1 45% !important;
+        min-width: 120px !important;
+    }
+
+    #filter-area .flex-grow-1 {
+        flex: 1 1 100% !important;
+    }
+
+    #filter-area .form-select,
+    #filter-area .form-control {
+        font-size: 11px !important;
+        padding: 6px 8px !important;
+        min-height: 32px !important;
+    }
+
+    #filter-area .btn {
+        font-size: 11px !important;
+        padding: 6px 12px !important;
+        min-height: 32px !important;
+    }
+
+    #filter-area label {
+        font-size: 10px !important;
+        margin-bottom: 2px !important;
+    }
+
+    /* Popup modals trên mobile - TOÀN MÀN HÌNH */
+    .swal2-popup {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        padding: 12px !important;
+        margin: 10px !important;
+    }
+
+    .swal2-title {
+        font-size: 14px !important;
+        padding: 8px 0 !important;
+    }
+
+    .swal2-html-container {
+        font-size: 11px !important;
+        padding: 8px 0 !important;
+        max-height: 60vh !important;
+        overflow-y: auto !important;
+    }
+
+    .swal2-actions {
+        margin: 8px 0 0 0 !important;
+    }
+
+    .swal2-actions button {
+        font-size: 12px !important;
+        padding: 8px 16px !important;
+        margin: 4px !important;
+    }
+
+    /* Detail popup trên mobile */
+    .detail-scroll-wrap {
+        max-height: 50vh !important;
+        padding: 10px !important;
+        font-size: 11px !important;
+    }
+
+    .detail-scroll-wrap .col-md-4,
+    .detail-scroll-wrap .col-6 {
+        flex: 0 0 50% !important;
+        max-width: 50% !important;
+        margin-bottom: 10px !important;
+    }
+
+    .detail-scroll-wrap small {
+        font-size: 9px !important;
+    }
+
+    .detail-scroll-wrap span {
+        font-size: 11px !important;
+    }
+
+    /* Child table trong popup mobile */
+    .child-table-scroll {
+        max-height: 200px !important;
+        font-size: 10px !important;
+    }
+
+    .child-detail-table {
+        font-size: 10px !important;
+    }
+
+    .child-detail-table th,
+    .child-detail-table td {
+        padding: 4px 6px !important;
+        font-size: 10px !important;
+    }
+
+    /* Nút thao tác trong child table trên mobile */
+    .btn-xs {
+        padding: 4px 6px !important;
+        font-size: 9px !important;
+        min-width: 28px !important;
+        min-height: 28px !important;
+    }
+
+    .btn-xs i {
+        font-size: 9px !important;
+    }
+
+    .btn-group {
+        display: flex !important;
+        gap: 4px !important;
+    }
+
+    /* Footer modal trên mobile */
+    .swal2-footer {
+        padding: 8px !important;
+    }
+
+    .detail-modal-footer button {
+        font-size: 11px !important;
+        padding: 8px 12px !important;
+        min-width: 80px !important;
+        min-height: 36px !important;
+    }
+
+    /* Nút "Thêm mới" và buttons trên mobile */
+    #extra-btn-area .btn {
+        font-size: 11px !important;
+        padding: 6px 12px !important;
+        white-space: nowrap !important;
+    }
+
+    #extra-btn-area {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+    }
+
+    /* Form inputs trên mobile */
+    .modal-body .form-control,
+    .modal-body .form-select {
+        font-size: 12px !important;
+        padding: 8px 10px !important;
+        min-height: 38px !important;
+    }
+
+    .modal-body .form-label {
+        font-size: 11px !important;
+        margin-bottom: 4px !important;
+    }
+
+    .modal-body .col-md-6 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* Salary calculator trên mobile */
+    #salary-calc-type,
+    #salary-from-date,
+    #salary-to-date,
+    #salary-user-group,
+    #salary-sudden-user,
+    #salary-sudden-from,
+    #salary-sudden-to,
+    #salary-sudden-reason {
+        font-size: 12px !important;
+        padding: 8px !important;
+        min-height: 38px !important;
+    }
+
+    /* Table trong salary result trên mobile */
+    .swal2-popup table {
+        font-size: 10px !important;
+    }
+
+    .swal2-popup table th,
+    .swal2-popup table td {
+        padding: 6px 4px !important;
+        font-size: 10px !important;
+    }
+
+    /* Cải thiện touch target cho mobile */
+    .custom-table tbody tr {
+        min-height: 44px !important;
+    }
+
+    .custom-table tbody tr td {
+        padding: 8px 6px !important;
+    }
+
+    /* Navbar mobile */
+    .navbar-brand {
+        font-size: 12px !important;
+    }
+
+    #manual-sidebar-btn,
+    #manual-home-btn {
+        padding: 6px 8px !important;
+    }
+
+    .dropdown-menu {
+        font-size: 11px !important;
+        min-width: 150px !important;
+    }
+
+    .dropdown-item {
+        padding: 8px 12px !important;
+        font-size: 11px !important;
+    }
+
+    /* Card header mobile */
+    .card-header {
+        padding: 6px 10px !important;
+    }
+
+    .card-header h5 {
+        font-size: 12px !important;
+        margin: 0 !important;
+    }
+
+    /* Sidebar mobile improvements */
+    .sidebar-item {
+        padding: 10px 16px !important;
+        font-size: 11px !important;
+    }
+
+    .sidebar-heading {
+        font-size: 10px !important;
+        margin: 12px 16px 6px !important;
+    }
+
+    /* Alert boxes mobile */
+    .alert {
+        font-size: 11px !important;
+        padding: 10px !important;
+    }
+
+    /* Badge mobile */
+    .badge {
+        font-size: 10px !important;
+        padding: 4px 8px !important;
+    }
+
+    /* Loading overlay mobile */
+    #loading-overlay .loader-text {
+        font-size: 12px !important;
+    }
+
+    /* Footer mobile */
+    .footer-bar {
+        display: none !important;
+    }
+
+    /* Bottom navigation cho mobile */
+    .mobile-bottom-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        border-top: 2px solid var(--primary-color);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 50px;
+        z-index: 9999;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+
+    .mobile-bottom-nav .nav-item {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        padding: 10px 20px;
+        cursor: pointer;
+        color: var(--primary-color);
+        transition: all 0.2s;
+        border: none;
+        background: transparent;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .mobile-bottom-nav .nav-item:active {
+        background-color: #f0f0f0;
+    }
+
+    .mobile-bottom-nav .nav-item i {
+        font-size: 20px;
+        margin-bottom: 0;
+    }
+
+    .mobile-bottom-nav .nav-item span {
+        display: none;
+    }
+
+    .mobile-bottom-nav .nav-item.active {
+        color: var(--primary-color);
+        background-color: #e8f5e9;
+        border-radius: 25px;
+    }
+
+    /* Ẩn home button trên navbar mobile */
+    #manual-home-btn {
+        display: none !important;
+    }
+
+    /* Detail field layout trên mobile: 2 cột */
+    .detail-field {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .detail-field .field-label {
+        color: #666;
+        font-size: 10px !important;
+        font-weight: 600;
+        margin-bottom: 4px;
+        display: block;
+    }
+
+    .detail-field .field-value {
+        color: #000;
+        font-size: 12px !important;
+        font-weight: 500;
+        display: block;
+        text-align: right !important;
+    }
+
+    .detail-field .field-value.text-end {
+        text-align: right !important;
+    }
+}
+
+/* --- DETAIL FIELD LAYOUT --- */
+.detail-field {
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-field .field-label {
+    color: #2e7d32;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: block;
+    text-align: left !important;
+}
+
+.detail-field .field-value {
+    color: #212121;
+    font-size: 13px;
+    font-weight: 500;
+    display: block;
+    text-align: right !important;
+}
+
+/* --- BẢNG CHẤM CÔNG ĐẶC BIỆT --- */
+#data-table.attendance-table {
+    font-size: 11px;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+#data-table.attendance-table caption {
+    background: linear-gradient(135deg, var(--primary-color), #1B5E20);
+    color: white;
+    padding: 12px;
+    border-radius: 8px 8px 0 0;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+}
+
+#data-table.attendance-table th {
+    background-color: var(--primary-color) !important;
+    color: white;
+    font-weight: 600;
+    padding: 10px 6px;
+    text-align: center;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border: 1px solid #1B5E20;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#data-table.attendance-table thead th:first-child,
+#data-table.attendance-table thead th:nth-child(2),
+#data-table.attendance-table thead th:nth-child(3),
+#data-table.attendance-table thead th:nth-child(4) {
+    position: sticky;
+    z-index: 15;
+    background-color: #1B5E20 !important;
+}
+
+#data-table.attendance-table thead th:first-child {
+    left: 0;
+}
+
+#data-table.attendance-table thead th:nth-child(2) {
+    left: 80px;
+}
+
+#data-table.attendance-table thead th:nth-child(3) {
+    left: 230px;
+}
+
+#data-table.attendance-table thead th:nth-child(4) {
+    left: 330px;
+}
+
+#data-table.attendance-table td {
+    padding: 8px 6px;
+    vertical-align: middle;
+    border: 1px solid #e0e0e0;
+    transition: all 0.2s ease;
+}
+
+#data-table.attendance-table sup {
+    font-size: 9px;
+    color: #e53935;
+    font-weight: bold;
+    margin-left: 3px;
+}
+
+#data-table.attendance-table tbody tr:hover {
+    background-color: #fff9c4 !important;
+}
+
+#data-table.attendance-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+#data-table.attendance-table tbody tr td:first-child,
+#data-table.attendance-table tbody tr td:nth-child(2),
+#data-table.attendance-table tbody tr td:nth-child(3),
+#data-table.attendance-table tbody tr td:nth-child(4) {
+    position: sticky;
+    background-color: white;
+    z-index: 5;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+}
+
+#data-table.attendance-table tbody tr:nth-child(even) td:first-child,
+#data-table.attendance-table tbody tr:nth-child(even) td:nth-child(2),
+#data-table.attendance-table tbody tr:nth-child(even) td:nth-child(3),
+#data-table.attendance-table tbody tr:nth-child(even) td:nth-child(4) {
+    background-color: #f9f9f9;
+}
+
+#data-table.attendance-table tbody tr:hover td:first-child,
+#data-table.attendance-table tbody tr:hover td:nth-child(2),
+#data-table.attendance-table tbody tr:hover td:nth-child(3),
+#data-table.attendance-table tbody tr:hover td:nth-child(4) {
+    background-color: #fff9c4 !important;
+}
+
+#data-table.attendance-table tbody tr td:first-child {
+    left: 0;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+#data-table.attendance-table tbody tr td:nth-child(2) {
+    left: 80px;
+    text-align: left;
+    font-weight: 500;
+}
+
+#data-table.attendance-table tbody tr td:nth-child(3) {
+    left: 230px;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+#data-table.attendance-table tbody tr td:nth-child(4) {
+    left: 330px;
+    font-weight: 700;
+    color: #e53935;
+}
+
+/* --- NÚT THAO TÁC BẢNG CON --- */
+.btn-xs {
+    padding: 2px 6px;
+    font-size: 10px;
+    line-height: 1.2;
+    border-radius: 3px;
+}
+
+.btn-xs i {
+    font-size: 10px;
+}
+
+.child-row-clickable:hover {
+    background-color: #f0f0f0 !important;
+}
+
+.btn-group .btn-xs {
+    margin: 0 1px;
 }
