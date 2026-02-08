@@ -702,6 +702,15 @@ window.switchTab = function (id, el) {
                         <i class="fas fa-plus me-1"></i> Thêm mới
                     </button>
                 `;
+            } else if (item.sheet === 'Chiphi') {
+                extraButtons = `
+                    <button class="btn btn-primary rounded-pill fw-bold shadow-sm px-3 me-2" onclick="openQuickExpenseForm()">
+                        <i class="fas fa-plus-circle me-1"></i> Nhập chi phí
+                    </button>
+                    <button class="btn btn-outline-secondary rounded-pill fw-bold shadow-sm px-3" onclick="openAddModal()">
+                        <i class="fas fa-plus me-1"></i> Tạo phiếu thủ công
+                    </button>
+                `;
             } else {
                 extraButtons = `<button class="btn btn-success rounded-pill fw-bold shadow-sm px-3" onclick="openAddModal()"><i class="fas fa-plus me-1"></i> Thêm mới</button>`;
             }
@@ -2134,4 +2143,188 @@ window.showRefreshToast = function() {
         icon: 'success',
         title: 'Đang làm mới dữ liệu...'
     });
+}
+
+// =============================================
+// NHẬP CHI PHÍ NHANH (Quick Expense Entry)
+// Luồng: Nhập chi tiết → tự tìm/tạo phiếu cha theo ngày+người lập
+// ID phiếu cha: MãNhânViên-YYMMDD (VD: CDX001-250527)
+// =============================================
+
+window.openQuickExpenseForm = function () {
+    // Lấy danh sách loại chi phí từ bảng Drop
+    var dropData = (GLOBAL_DATA['Drop'] || []).filter(function (r) {
+        var cond = String(r['condition'] || r['Condition'] || '').toLowerCase().trim();
+        return cond === 'loaichiphi' && r['Delete'] !== 'X';
+    });
+
+    var loaiOptions = '<option value="">-- Chọn loại chi phí --</option>';
+    dropData.forEach(function (item) {
+        var val = item['label'] || item['Label'] || item['id'] || item['ID'] || '';
+        loaiOptions += '<option value="' + String(val).replace(/"/g, '&quot;') + '">' + String(val).replace(/</g, '&lt;') + '</option>';
+    });
+
+    // Nếu Drop chưa load hoặc rỗng, thêm vài option mặc định
+    if (dropData.length === 0) {
+        loaiOptions += '<option value="Vật tư">Vật tư</option>';
+        loaiOptions += '<option value="Xăng dầu">Xăng dầu</option>';
+        loaiOptions += '<option value="Ăn uống">Ăn uống</option>';
+        loaiOptions += '<option value="Vận chuyển">Vận chuyển</option>';
+        loaiOptions += '<option value="Khác">Khác</option>';
+    }
+
+    var today = new Date().toISOString().split('T')[0];
+    var userName = CURRENT_USER ? (CURRENT_USER.name || CURRENT_USER['Họ và tên'] || '') : '';
+
+    var html = '<div style="text-align: left;">'
+        + '<div class="alert alert-info py-2 mb-3" style="font-size:12px;">'
+        + '<i class="fas fa-info-circle me-1"></i> Hệ thống sẽ tự động tạo/gom phiếu chi phí theo <b>ngày + người lập</b>.'
+        + '</div>'
+        + '<div class="mb-3">'
+        + '  <label class="form-label fw-bold">Ngày chi <span class="text-danger">*</span></label>'
+        + '  <input type="date" id="qe-date" class="form-control" value="' + today + '">'
+        + '</div>'
+        + '<div class="mb-3">'
+        + '  <label class="form-label fw-bold">Người lập</label>'
+        + '  <input type="text" class="form-control bg-light" value="' + userName + '" disabled>'
+        + '</div>'
+        + '<div class="mb-3">'
+        + '  <label class="form-label fw-bold">Loại chi phí <span class="text-danger">*</span></label>'
+        + '  <select id="qe-loai" class="form-select">' + loaiOptions + '</select>'
+        + '</div>'
+        + '<div class="mb-3">'
+        + '  <label class="form-label fw-bold">Số tiền (VNĐ) <span class="text-danger">*</span></label>'
+        + '  <input type="number" id="qe-sotien" class="form-control" placeholder="Nhập số tiền..." min="0">'
+        + '</div>'
+        + '<div class="mb-3">'
+        + '  <label class="form-label fw-bold">Ghi chú</label>'
+        + '  <textarea id="qe-ghichu" class="form-control" rows="2" placeholder="Mô tả chi tiết khoản chi..."></textarea>'
+        + '</div>'
+        + '</div>';
+
+    Swal.fire({
+        title: '<i class="fas fa-coins me-2 text-success"></i>Nhập chi phí nhanh',
+        html: html,
+        width: '500px',
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-save me-1"></i> Lưu chi phí',
+        cancelButtonText: 'Hủy',
+        confirmButtonColor: '#2E7D32',
+        customClass: { popup: 'rounded-4 shadow-lg' },
+        preConfirm: function () {
+            var date = document.getElementById('qe-date').value;
+            var loai = document.getElementById('qe-loai').value;
+            var sotien = document.getElementById('qe-sotien').value;
+            var ghichu = document.getElementById('qe-ghichu').value;
+
+            if (!date) { Swal.showValidationMessage('Vui lòng chọn ngày chi'); return false; }
+            if (!loai) { Swal.showValidationMessage('Vui lòng chọn loại chi phí'); return false; }
+            if (!sotien || isNaN(sotien) || Number(sotien) <= 0) { Swal.showValidationMessage('Vui lòng nhập số tiền hợp lệ (> 0)'); return false; }
+
+            return { date: date, loai: loai, sotien: Number(sotien), ghichu: ghichu || '' };
+        }
+    }).then(function (result) {
+        if (result.isConfirmed) {
+            submitQuickExpense(result.value);
+        }
+    });
+}
+
+async function submitQuickExpense(params) {
+    showLoading(true, 'Đang lưu chi phí...');
+
+    try {
+        var userId = CURRENT_USER['ID'] || CURRENT_USER['id'] || '';
+        if (!userId) throw new Error('Không xác định được mã nhân viên. Vui lòng đăng nhập lại.');
+
+        // Format ngày thành YYMMDD
+        var d = new Date(params.date);
+        var yy = String(d.getFullYear()).slice(-2);
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        var dd = String(d.getDate()).padStart(2, '0');
+        var dateYYMMDD = yy + mm + dd;
+
+        // ID phiếu cha: MãNhânViên-YYMMDD (VD: CDX001-250527)
+        var parentId = userId + '-' + dateYYMMDD;
+
+        // === Bước 1: Tìm phiếu cha đã tồn tại ===
+        var existingParent = (GLOBAL_DATA['Chiphi'] || []).find(function (r) {
+            return r['ID_ChiPhi'] === parentId && r['Delete'] !== 'X';
+        });
+
+        // === Bước 2: Nếu chưa có → tạo phiếu cha mới ===
+        if (!existingParent) {
+            var parentData = {
+                'ID_ChiPhi': parentId,
+                'NgayChiphi': params.date,
+                'NguoiLap': userId,
+                'TongSoTien': 0,
+                'Trangthai': 'Đang xử lý'
+            };
+            var parentResult = await callSupabase('insert', 'Chiphi', parentData);
+            if (parentResult.status !== 'success') {
+                throw new Error(parentResult.message || 'Lỗi khi tạo phiếu chi phí');
+            }
+        }
+
+        // === Bước 3: Tạo bản ghi chi tiết (con) gắn vào phiếu cha ===
+        var childData = {
+            'ID_ChiPhi': parentId,
+            'Ngaychi': params.date,
+            'LoaiChiPhi': params.loai,
+            'SoTien': params.sotien,
+            'GhiChu': params.ghichu,
+            'NguoiLap': userId
+        };
+        var childResult = await callSupabase('insert', 'Chiphichitiet', childData);
+        if (childResult.status !== 'success') {
+            throw new Error(childResult.message || 'Lỗi khi lưu chi tiết chi phí');
+        }
+
+        // === Bước 4: Tính lại tổng tiền phiếu cha ===
+        // Refresh bảng con trước để có dữ liệu mới nhất
+        await refreshSingleSheet('Chiphichitiet');
+
+        var allChildren = (GLOBAL_DATA['Chiphichitiet'] || []).filter(function (c) {
+            return c['ID_ChiPhi'] === parentId && c['Delete'] !== 'X';
+        });
+        var tongTien = allChildren.reduce(function (sum, c) {
+            return sum + (parseFloat(c['SoTien']) || 0);
+        }, 0);
+
+        // Cập nhật tổng tiền vào phiếu cha
+        await callSupabase('update', 'Chiphi', { 'TongSoTien': tongTien }, parentId);
+
+        // Refresh bảng cha để hiển thị mới nhất
+        await refreshSingleSheet('Chiphi');
+
+        showLoading(false);
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Đã lưu thành công!',
+            html: '<div style="font-size:13px;">'
+                + '<p>Phiếu: <b>' + parentId + '</b></p>'
+                + '<p>Khoản chi: <b>' + params.loai + '</b> — <span class="text-success fw-bold">' + params.sotien.toLocaleString('vi-VN') + ' đ</span></p>'
+                + '<p>Tổng phiếu ngày này: <span class="text-danger fw-bold">' + tongTien.toLocaleString('vi-VN') + ' đ</span></p>'
+                + '</div>',
+            confirmButtonText: '<i class="fas fa-plus me-1"></i> Nhập tiếp',
+            showCancelButton: true,
+            cancelButtonText: 'Đóng',
+            confirmButtonColor: '#2E7D32'
+        }).then(function (result) {
+            if (result.isConfirmed) {
+                openQuickExpenseForm(); // Mở lại form để nhập tiếp
+            }
+        });
+
+    } catch (err) {
+        showLoading(false);
+        console.error('Quick Expense Error:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'Lỗi lưu chi phí',
+            text: err.message || 'Không thể lưu chi phí. Vui lòng thử lại.'
+        });
+    }
 }
