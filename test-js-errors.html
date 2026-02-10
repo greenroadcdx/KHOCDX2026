@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test JavaScript Errors - KHOCDX</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .error { color: red; background: #ffe6e6; padding: 10px; margin: 10px 0; border: 1px solid red; }
+        .success { color: green; background: #e6ffe6; padding: 10px; margin: 10px 0; border: 1px solid green; }
+        .warning { color: orange; background: #fff3e0; padding: 10px; margin: 10px 0; border: 1px solid orange; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Test JavaScript Errors - KHOCDX App</h1>
+    
+    <div id="error-log"></div>
+    
+    <button onclick="testBasicFunctions()">Test Basic Functions</button>
+    <button onclick="testTableFunctions()">Test Table Functions</button>
+    <button onclick="testPayrollFunctions()">Test Payroll Functions</button>
+    <button onclick="clearLog()">Clear Log</button>
+    
+    <div id="test-results"></div>
+
+    <!-- Load dependencies giống main app -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script>
+        var errorLog = [];
+        var testResults = document.getElementById('test-results');
+        var errorLogDiv = document.getElementById('error-log');
+
+        // Capture errors
+        window.addEventListener('error', function(e) {
+            var errorInfo = {
+                message: e.error?.message || e.message,
+                filename: e.filename,
+                line: e.lineno,
+                column: e.colno,
+                timestamp: new Date().toISOString()
+            };
+            errorLog.push(errorInfo);
+            updateErrorLog();
+        });
+
+        function updateErrorLog() {
+            if (errorLog.length > 0) {
+                errorLogDiv.innerHTML = '<div class="error"><h3>❌ JavaScript Errors Detected:</h3>' + 
+                    errorLog.map(e => `<div><strong>${e.message}</strong><br>File: ${e.filename}:${e.line}:${e.column}<br>Time: ${e.timestamp}</div>`).join('<hr>') + 
+                    '</div>';
+            } else {
+                errorLogDiv.innerHTML = '<div class="success">✅ No JavaScript errors detected</div>';
+            }
+        }
+
+        function log(type, message) {
+            var className = type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'success';
+            testResults.innerHTML += `<div class="${className}">${message}</div>`;
+        }
+
+        function clearLog() {
+            errorLog = [];
+            testResults.innerHTML = '';
+            errorLogDiv.innerHTML = '';
+        }
+
+        function testBasicFunctions() {
+            log('info', '🔍 Testing Basic Functions...');
+            
+            try {
+                // Test formatMoney function
+                if (typeof formatMoney !== 'function') {
+                    log('error', '❌ formatMoney function not found');
+                } else {
+                    var testMoney = formatMoney(1234567, true);
+                    log('success', `✅ formatMoney: ${testMoney}`);
+                }
+                
+                // Test formatNumber function
+                if (typeof formatNumber !== 'function') {
+                    log('error', '❌ formatNumber function not found');
+                } else {
+                    var testNumber = formatNumber(123.456, 2);
+                    log('success', `✅ formatNumber: ${testNumber}`);
+                }
+                
+                // Test isMoneyField function
+                if (typeof isMoneyField !== 'function') {
+                    log('error', '❌ isMoneyField function not found');
+                } else {
+                    var testField = isMoneyField('SoTien');
+                    log('success', `✅ isMoneyField: ${testField}`);
+                }
+                
+            } catch (error) {
+                log('error', `❌ Error testing basic functions: ${error.message}`);
+            }
+        }
+
+        function testTableFunctions() {
+            log('info', '🔍 Testing Table Functions...');
+            
+            try {
+                // Test getVisibleColumns
+                if (typeof getVisibleColumns === 'function') {
+                    var testData = [{ id: 1, name: 'Test', empty: '', Delete: 'X' }];
+                    var visibleCols = getVisibleColumns(testData);
+                    log('success', `✅ getVisibleColumns: ${JSON.stringify(visibleCols)}`);
+                } else {
+                    log('warning', '⚠️ getVisibleColumns function not found (using fallback)');
+                }
+                
+                // Test optimizeTableDisplay
+                if (typeof optimizeTableDisplay === 'function') {
+                    optimizeTableDisplay();
+                    log('success', '✅ optimizeTableDisplay executed');
+                } else {
+                    log('warning', '⚠️ optimizeTableDisplay function not found');
+                }
+                
+                // Test setupTableScrollIndicators
+                if (typeof setupTableScrollIndicators === 'function') {
+                    setupTableScrollIndicators();
+                    log('success', '✅ setupTableScrollIndicators executed');
+                } else {
+                    log('warning', '⚠️ setupTableScrollIndicators function not found');
+                }
+                
+            } catch (error) {
+                log('error', `❌ Error testing table functions: ${error.message}`);
+            }
+        }
+
+        function testPayrollFunctions() {
+            log('info', '🔍 Testing Payroll Functions...');
+            
+            try {
+                // Test exportPayrollToExcel
+                if (typeof exportPayrollToExcel === 'function') {
+                    log('success', '✅ exportPayrollToExcel function found');
+                } else {
+                    log('error', '❌ exportPayrollToExcel function not found');
+                }
+                
+                // Test numberToVietnameseText
+                if (typeof numberToVietnameseText === 'function') {
+                    var testText = numberToVietnameseText(123456);
+                    log('success', `✅ numberToVietnameseText: ${testText}`);
+                } else {
+                    log('error', '❌ numberToVietnameseText function not found');
+                }
+                
+                // Test showPayrollDetail
+                if (typeof showPayrollDetail === 'function') {
+                    log('success', '✅ showPayrollDetail function found');
+                } else {
+                    log('error', '❌ showPayrollDetail function not found');
+                }
+                
+            } catch (error) {
+                log('error', `❌ Error testing payroll functions: ${error.message}`);
+            }
+        }
+
+        // Auto run basic tests
+        setTimeout(() => {
+            updateErrorLog();
+            log('info', '🚀 Starting automatic tests...');
+        }, 1000);
+    </script>
+    
+    <!-- Load main.js để test -->
+    <script type="module">
+        try {
+            // Import main.js content để test
+            const response = await fetch('./src/main.js');
+            const content = await response.text();
+            
+            // Thực thi trong function scope để catch errors
+            try {
+                eval(content);
+                log('success', '✅ main.js loaded successfully');
+                
+                // Chạy tests sau khi load xong
+                setTimeout(() => {
+                    testBasicFunctions();
+                    testTableFunctions();
+                    testPayrollFunctions();
+                }, 500);
+                
+            } catch (evalError) {
+                log('error', `❌ JavaScript execution error in main.js: ${evalError.message}`);
+                console.error('Full eval error:', evalError);
+            }
+            
+        } catch (loadError) {
+            log('error', `❌ Cannot load main.js: ${loadError.message}`);
+        }
+    </script>
+</body>
+</html>

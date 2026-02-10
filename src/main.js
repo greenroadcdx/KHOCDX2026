@@ -439,147 +439,6 @@ function isNumericField(k) {
     return /so.?luong|số lượng|soluong|so_luong|gio|giờ|hour|so.?ngay|số ngày|songay|so_ngay|so.?gio|số giờ|sogio|so_gio|ty.?le|tỷ lệ|tile|ti_le|phan.?tram|phần trăm|phantram|phan_tram|he.?so|hệ số|heso|he_so/i.test(k);
 }
 
-// === XỬ LÝ CỘT TRỐNG KHÔNG CẦN THIẾT ===
-function getVisibleColumns(data, excludeColumns = []) {
-    if (!Array.isArray(data) || data.length === 0) return [];
-    
-    var sampleData = data.find(r => r && typeof r === 'object') || {};
-    var allKeys = Object.keys(sampleData);
-    
-    // Loại bỏ các cột không cần thiết
-    var defaultExcludeColumns = [
-        'Delete', 'delete', 'DELETE',
-        'created_at', 'updated_at', 'CreatedAt', 'UpdatedAt',
-        'timestamp', 'Timestamp', 'TIMESTAMP'
-    ];
-    
-    var excludeSet = new Set([...defaultExcludeColumns, ...excludeColumns]);
-    
-    return allKeys.filter(key => {
-        // Loại bỏ cột trong danh sách exclude
-        if (excludeSet.has(key)) return false;
-        
-        // Kiểm tra cột có dữ liệu hữu ích không
-        var hasData = data.some(row => {
-            var value = row[key];
-            return value !== null && value !== undefined && 
-                   value !== '' && value !== 0 && 
-                   String(value).trim() !== '';
-        });
-        
-        return hasData;
-    });
-}
-
-function getOptimalColumnWidth(data, columnKey) {
-    if (!Array.isArray(data) || data.length === 0) return 'auto';
-    
-    var maxLength = Math.max(
-        columnKey.length, // Độ dài header
-        ...data.map(row => {
-            var value = row[columnKey];
-            if (value === null || value === undefined) return 0;
-            return String(value).length;
-        })
-    );
-    
-    // Tính width dựa trên độ dài nội dung
-    var baseWidth = Math.max(60, Math.min(maxLength * 8, 200)); // Min 60px, Max 200px
-    
-    // Điều chỉnh cho các loại cột đặc biệt
-    if (isMoneyField(columnKey)) return Math.max(baseWidth, 100) + 'px';
-    if (isNumericField(columnKey)) return Math.max(baseWidth, 80) + 'px';
-    if (columnKey.toLowerCase().includes('tên') || columnKey.toLowerCase().includes('name')) return Math.max(baseWidth, 120) + 'px';
-    if (columnKey.toLowerCase().includes('mô tả') || columnKey.toLowerCase().includes('ghi chú')) return Math.max(baseWidth, 150) + 'px';
-    
-    return baseWidth + 'px';
-}
-
-// === QUẢN LÝ THANH TRƯỢT BẢNG ===
-function setupTableScrollIndicators() {
-    var tableContainers = document.querySelectorAll('.table-scroll, .table-responsive');
-    
-    tableContainers.forEach(container => {
-        var table = container.querySelector('table');
-        if (!table) return;
-        
-        // Kiểm tra xem có scroll horizontal không
-        function checkHorizontalScroll() {
-            var hasScroll = container.scrollWidth > container.clientWidth;
-            
-            // Thêm/xóa indicator
-            var indicator = container.querySelector('.scroll-indicator');
-            if (hasScroll && !indicator) {
-                indicator = document.createElement('div');
-                indicator.className = 'scroll-indicator';
-                indicator.innerHTML = '<i class="fas fa-arrows-alt-h"></i> Vuốt ngang để xem thêm';
-                indicator.style.cssText = `
-                    position: absolute;
-                    top: 50%;
-                    right: 10px;
-                    transform: translateY(-50%);
-                    background: rgba(46, 125, 50, 0.9);
-                    color: white;
-                    padding: 5px 10px;
-                    border-radius: 4px;
-                    font-size: 11px;
-                    z-index: 30;
-                    pointer-events: none;
-                    animation: fadeInOut 3s ease-in-out;
-                `;
-                container.style.position = 'relative';
-                container.appendChild(indicator);
-                
-                // Auto hide after 3 seconds
-                setTimeout(() => {
-                    if (indicator && indicator.parentNode) {
-                        indicator.remove();
-                    }
-                }, 3000);
-            } else if (!hasScroll && indicator) {
-                indicator.remove();
-            }
-        }
-        
-        // Kiểm tra khi load và khi resize
-        checkHorizontalScroll();
-        container.addEventListener('scroll', checkHorizontalScroll);
-        window.addEventListener('resize', checkHorizontalScroll);
-    });
-}
-
-// === AUTO OPTIMIZE TABLE WIDTH ===
-function optimizeTableDisplay() {
-    var table = document.getElementById('data-table');
-    if (!table) return;
-    
-    var container = table.closest('.table-scroll, .table-responsive');
-    if (!container) return;
-    
-    var headers = table.querySelectorAll('thead th');
-    var totalRequiredWidth = 0;
-    
-    headers.forEach(th => {
-        var computedStyle = window.getComputedStyle(th);
-        var width = parseInt(computedStyle.minWidth) || 100;
-        totalRequiredWidth += width;
-    });
-    
-    var containerWidth = container.clientWidth;
-    
-    // Nếu table rộng hơn container, kích hoạt horizontal scroll
-    if (totalRequiredWidth > containerWidth - 50) { // -50 để có margin
-        table.style.minWidth = totalRequiredWidth + 'px';
-        container.style.overflowX = 'auto';
-        
-        // Setup scroll indicators
-        setTimeout(setupTableScrollIndicators, 100);
-    } else {
-        table.style.minWidth = '100%';
-        container.style.overflowX = 'visible';
-    }
-}
-
 // Ràng buộc input cho các trường đặc biệt
 const FIELD_CONSTRAINTS = {
     'HeSoTangCa': { type: 'number', min: 1.1, max: 1.9, step: 0.1, placeholder: 'Từ 1.1 đến 1.9' },
@@ -1073,11 +932,6 @@ window.switchTab = function (id, el) {
         }
     }
     if (window.innerWidth < 992 && sidebarBS) sidebarBS.hide();
-    
-    // Trigger event cho responsive table setup
-    setTimeout(() => {
-        document.dispatchEvent(new CustomEvent('tabSwitched', { detail: { tabId: id, sheet: CURRENT_SHEET } }));
-    }, 100);
 }
 
 // --- MỞ CÀI ĐẶT LƯƠNG CHO NHÂN VIÊN ---
@@ -1716,358 +1570,130 @@ window.showEmployeeSalaryDetail = function(emp, month, year) {
     });
 }
 
-// --- XUẤT EXCEL BẢNG LƯƠNG THÁNG ---
+// --- XUẤT EXCEL BẢNG LƯƠNG ĐƠN GIẢN ---
 window.exportPayrollToExcel = function() {
-    var month = document.getElementById('payroll-month-filter')?.value;
-    var year = document.getElementById('payroll-year-filter')?.value;
-    var searchText = (document.getElementById('payroll-search')?.value || '').toLowerCase().trim();
+    try {
+        var monthEl = document.getElementById('payroll-month-filter');
+        var yearEl = document.getElementById('payroll-year-filter');
+        var month = monthEl ? monthEl.value : '';
+        var year = yearEl ? yearEl.value : '';
 
-    if (!month || !year) {
-        Swal.fire({
-            icon: 'warning',
-            title: 'Thiếu thông tin',
-            text: 'Vui lòng chọn tháng và năm để xuất Excel',
-            confirmButtonColor: '#ffc107'
-        });
-        return;
-    }
-
-    Swal.fire({
-        icon: 'info',
-        title: 'Xuất Excel',
-        text: `Đang chuẩn bị file Excel bảng lương tháng ${month}/${year}...`,
-        timer: 2000,
-        showConfirmButton: false
-    });
-
-    setTimeout(function() {
-        try {
-            var data = GLOBAL_DATA['BangLuongThang'] || [];
-            var userData = GLOBAL_DATA['User'] || [];
-            
-            // Lọc dữ liệu theo tháng/năm và search
-            var filteredData = data.filter(r => {
-                if (r['Delete'] === 'X') return false;
-                
-                var recordMonth = parseInt(r['Thang'] || r['Tháng']) || 0;
-                var recordYear = parseInt(r['Nam'] || r['Năm']) || 0;
-                
-                if (recordMonth !== parseInt(month) || recordYear !== parseInt(year)) return false;
-                
-                // Lọc theo search text
-                if (searchText) {
-                    var empName = (r['HoTen'] || r['Họ và tên'] || '').toLowerCase();
-                    var empId = (r['ID_NhanVien'] || r['MaNhanVien'] || '').toLowerCase();
-                    if (!empName.includes(searchText) && !empId.includes(searchText)) return false;
-                }
-                
-                return true;
-            });
-
-            if (filteredData.length === 0) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Không có dữ liệu',
-                    text: 'Không có dữ liệu lương cho tháng/năm đã chọn',
-                    confirmButtonColor: '#ffc107'
-                });
-                return;
-            }
-
-            // Tạo workbook
-            var wb = XLSX.utils.book_new();
-            var wsData = [];
-            
-            // Tiêu đề bảng
-            var monthNames = ['', 'MỘT', 'HAI', 'BA', 'TƯ', 'NĂM', 'SÁU', 'BẢY', 'TÁM', 'CHÍN', 'MƯỜI', 'MƯỜI MỘT', 'MƯỜI HAI'];
-            wsData.push([`BẢNG LƯƠNG THÁNG ${monthNames[parseInt(month)] || month}/${year} - CÔNG TY CON ĐƯỜNG XANH`]);
-            wsData.push([]); // Dòng trống
-            
-            // Header chính
-            wsData.push([
-                'STT', 'Mã NV', 'Họ và tên', 'Bộ phận', 'Chức vụ',
-                'Số giờ công', 'Số giờ TC', 'Lương cơ bản', 'Tiền tăng ca',
-                'Phụ cấp', 'Thưởng', 'Tổng thu nhập',
-                'Tạm ứng', 'Bảo hiểm', 'Nợ tháng trước', 'Giảm trừ khác', 'Tổng giảm',
-                'Thực lĩnh', 'Ghi chú'
-            ]);
-            
-            // Dữ liệu nhân viên
-            var totalStats = {
-                employees: 0,
-                totalHours: 0,
-                totalOvertime: 0,
-                totalBasicSalary: 0,
-                totalOvertimePay: 0,
-                totalAllowance: 0,
-                totalBonus: 0,
-                totalIncome: 0,
-                totalAdvance: 0,
-                totalInsurance: 0,
-                totalPrevDebt: 0,
-                totalDeductions: 0,
-                totalGrandDeductions: 0,
-                totalNetSalary: 0
-            };
-
-            filteredData.forEach((record, index) => {
-                var empId = record['ID_NhanVien'] || record['MaNhanVien'] || '';
-                var empInfo = userData.find(u => u['ID'] === empId);
-                
-                // Lấy thông tin nhân viên
-                var empName = record['HoTen'] || record['Họ và tên'] || empId;
-                var department = empInfo?.['Bộ phận'] || empInfo?.['Bo_phan'] || '';
-                var position = empInfo?.['Chức vụ'] || empInfo?.['Chuc_vu'] || '';
-                
-                // Tính toán số liệu
-                var totalHours = parseFloat(record['TongGioCong']) || 0;
-                var totalOvertime = parseFloat(record['TongGioTangCa']) || 0;
-                var basicSalary = parseFloat(record['TongLuongCoBan']) || 0;
-                var overtimePay = parseFloat(record['TongTienTangCa']) || 0;
-                var allowance = parseFloat(record['TongPhuCap']) || 0;
-                var bonus = parseFloat(record['TongThuong']) || 0;
-                var totalIncome = basicSalary + overtimePay + allowance + bonus;
-                
-                var advance = parseFloat(record['TongTamUng']) || 0;
-                var insurance = parseFloat(record['TongBaoHiem']) || 0;
-                var prevDebt = parseFloat(record['NoThangTruoc']) || 0;
-                var otherDeductions = parseFloat(record['TongGiamTru']) || 0;
-                var totalGrandDeductions = advance + insurance + prevDebt + otherDeductions;
-                
-                var netSalary = totalIncome - totalGrandDeductions;
-                var note = record['GhiChu'] || record['Ghi chú'] || '';
-                
-                // Cập nhật thống kê tổng
-                totalStats.employees++;
-                totalStats.totalHours += totalHours;
-                totalStats.totalOvertime += totalOvertime;
-                totalStats.totalBasicSalary += basicSalary;
-                totalStats.totalOvertimePay += overtimePay;
-                totalStats.totalAllowance += allowance;
-                totalStats.totalBonus += bonus;
-                totalStats.totalIncome += totalIncome;
-                totalStats.totalAdvance += advance;
-                totalStats.totalInsurance += insurance;
-                totalStats.totalPrevDebt += prevDebt;
-                totalStats.totalDeductions += otherDeductions;
-                totalStats.totalGrandDeductions += totalGrandDeductions;
-                totalStats.totalNetSalary += netSalary;
-
-                // Thêm dòng dữ liệu
-                wsData.push([
-                    index + 1,
-                    empId,
-                    empName,
-                    department,
-                    position,
-                    totalHours, // Sẽ được format trong Excel
-                    totalOvertime,
-                    basicSalary,
-                    overtimePay,
-                    allowance,
-                    bonus,
-                    totalIncome,
-                    advance,
-                    insurance,
-                    prevDebt,
-                    otherDeductions,
-                    totalGrandDeductions,
-                    netSalary,
-                    note
-                ]);
-            });
-
-            // Thêm dòng trống trước tổng cộng
-            wsData.push([]);
-            
-            // Dòng tổng cộng với công thức
-            var totalRowIndex = wsData.length + 1; // +1 vì Excel bắt đầu từ 1
-            wsData.push([
-                '',
-                'TỔNG CỘNG',
-                `${totalStats.employees} nhân viên`,
-                '',
-                '',
-                { f: `=SUM(F4:F${wsData.length - 1})` }, // Tổng giờ công
-                { f: `=SUM(G4:G${wsData.length - 1})` }, // Tổng giờ TC
-                { f: `=SUM(H4:H${wsData.length - 1})` }, // Tổng lương cơ bản
-                { f: `=SUM(I4:I${wsData.length - 1})` }, // Tổng tiền TC
-                { f: `=SUM(J4:J${wsData.length - 1})` }, // Tổng phụ cấp
-                { f: `=SUM(K4:K${wsData.length - 1})` }, // Tổng thưởng
-                { f: `=SUM(L4:L${wsData.length - 1})` }, // Tổng thu nhập
-                { f: `=SUM(M4:M${wsData.length - 1})` }, // Tổng tạm ứng
-                { f: `=SUM(N4:N${wsData.length - 1})` }, // Tổng bảo hiểm
-                { f: `=SUM(O4:O${wsData.length - 1})` }, // Tổng nợ tháng trước
-                { f: `=SUM(P4:P${wsData.length - 1})` }, // Tổng giảm trừ khác
-                { f: `=SUM(Q4:Q${wsData.length - 1})` }, // Tổng giảm
-                { f: `=SUM(R4:R${wsData.length - 1})` }, // Tổng thực lĩnh
-                'Tổng cộng bảng lương'
-            ]);
-            
-            // Thêm thống kê tóm tắt
-            wsData.push([]);
-            wsData.push(['THỐNG KÊ TỔNG QUAN:']);
-            wsData.push(['Tổng thu nhập:', { f: `=L${totalRowIndex}` }]);
-            wsData.push(['Tổng chi phí:', { f: `=Q${totalRowIndex}` }]);
-            wsData.push(['Thu nhập ròng:', { f: `=R${totalRowIndex}` }]);
-            wsData.push(['Lương TB/người:', { f: `=R${totalRowIndex}/C${totalRowIndex}` }]);
-
-            // Tạo worksheet
-            var ws = XLSX.utils.aoa_to_sheet(wsData);
-
-            // Merge tiêu đề
-            ws['!merges'] = [
-                { s: { r: 0, c: 0 }, e: { r: 0, c: 18 } } // Merge tiêu đề toàn bộ dòng đầu
-            ];
-
-            // Set column widths
-            ws['!cols'] = [
-                { wch: 5 },  // STT
-                { wch: 10 }, // Mã NV
-                { wch: 20 }, // Họ và tên
-                { wch: 15 }, // Bộ phận
-                { wch: 15 }, // Chức vụ
-                { wch: 10 }, // Số giờ công
-                { wch: 10 }, // Số giờ TC
-                { wch: 13 }, // Lương cơ bản
-                { wch: 13 }, // Tiền tăng ca
-                { wch: 12 }, // Phụ cấp
-                { wch: 10 }, // Thưởng
-                { wch: 14 }, // Tổng thu nhập
-                { wch: 12 }, // Tạm ứng
-                { wch: 10 }, // Bảo hiểm
-                { wch: 12 }, // Nợ tháng trước
-                { wch: 12 }, // Giảm trừ khác
-                { wch: 12 }, // Tổng giảm
-                { wch: 14 }, // Thực lĩnh
-                { wch: 20 }  // Ghi chú
-            ];
-
-            // Styling cho Excel
-            var range = XLSX.utils.decode_range(ws['!ref']);
-            
-            for (var R = range.s.r; R <= range.e.r; ++R) {
-                for (var C = range.s.c; C <= range.e.c; ++C) {
-                    var cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
-                    if (!cell) continue;
-                    
-                    // Thiết lập style cơ bản
-                    cell.s = {
-                        alignment: { horizontal: "center", vertical: "center" },
-                        border: {
-                            top: { style: "thin", color: { rgb: "000000" } },
-                            bottom: { style: "thin", color: { rgb: "000000" } },
-                            left: { style: "thin", color: { rgb: "000000" } },
-                            right: { style: "thin", color: { rgb: "000000" } }
-                        },
-                        font: { size: 11 }
-                    };
-                    
-                    // Định dạng tiêu đề
-                    if (R === 0) {
-                        cell.s.font = { bold: true, size: 16, color: { rgb: "FFFFFF" } };
-                        cell.s.fill = { fgColor: { rgb: "2E7D32" } }; // Xanh brand
-                        cell.s.border = {
-                            top: { style: "thick", color: { rgb: "000000" } },
-                            bottom: { style: "thick", color: { rgb: "000000" } },
-                            left: { style: "thick", color: { rgb: "000000" } },
-                            right: { style: "thick", color: { rgb: "000000" } }
-                        };
-                    }
-                    // Định dạng header
-                    else if (R === 2) {
-                        cell.s.font = { bold: true, size: 10, color: { rgb: "FFFFFF" } };
-                        cell.s.fill = { fgColor: { rgb: "4CAF50" } }; // Xanh lá header
-                        // Căn phải cho cột số liệu (từ cột 5 trở đi)
-                        if (C >= 5 && C <= 17) {
-                            cell.s.alignment.horizontal = "right";
-                        }
-                    }
-                    // Định dạng dòng tổng cộng
-                    else if (R === range.e.r) {
-                        cell.s.font = { bold: true, size: 11, color: { rgb: "FFFFFF" } };
-                        cell.s.fill = { fgColor: { rgb: "FF9800" } }; // Cam cho tổng cộng
-                        if (C >= 5 && C <= 17) {
-                            cell.s.alignment.horizontal = "right";
-                        }
-                    }
-                    // Định dạng dữ liệu
-                    else if (R >= 3 && R < range.e.r) {
-                        // Căn phải cho cột số liệu
-                        if (C >= 5 && C <= 17) {
-                            cell.s.alignment.horizontal = "right";
-                        }
-                        
-                        // Định dạng số cho các cột tiền tệ
-                        if ((C >= 7 && C <= 11) || (C >= 12 && C <= 17)) {
-                            if (typeof cell.v === 'number') {
-                                cell.z = '#,##0'; // Định dạng số với phân tách hàng ngàn
-                            }
-                            
-                            // Màu sắc theo loại
-                            if (C >= 7 && C <= 11) {
-                                cell.s.font.color = { rgb: "2E7D32" }; // Xanh cho thu nhập
-                            } else if (C >= 12 && C <= 16) {
-                                cell.s.font.color = { rgb: "D32F2F" }; // Đỏ cho khoản trừ
-                            } else if (C === 17) {
-                                cell.s.font.color = { rgb: "1976D2" }; // Xanh dương cho thực lĩnh
-                                cell.s.font.bold = true;
-                            }
-                        }
-                        // Định dạng số giờ
-                        else if (C === 5 || C === 6) {
-                            if (typeof cell.v === 'number') {
-                                cell.z = '0.0'; // 1 chữ số thập phân
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Thêm worksheet vào workbook
-            XLSX.utils.book_append_sheet(wb, ws, `Bảng lương T${month}-${year}`);
-
-            // Xuất file
-            var fileName = `BangLuong_Thang${month}_${year}.xlsx`;
-            XLSX.writeFile(wb, fileName);
-
+        if (!month || !year) {
             Swal.fire({
-                icon: 'success',
-                title: 'Thành công!',
-                html: `
-                    <div class="text-start">
-                        <p><strong>File Excel bảng lương đã được tải xuống:</strong></p>
-                        <ul class="list-unstyled">
-                            <li>✅ <strong>${filteredData.length} nhân viên</strong> trong tháng ${month}/${year}</li>
-                            <li>✅ Định dạng số với <strong>phân tách hàng ngàn</strong></li>
-                            <li>✅ Căn lề phải cho tất cả số liệu</li>
-                            <li>✅ Màu sắc phân biệt: Thu nhập (xanh), Chi phí (đỏ), Thực lĩnh (xanh dương)</li>
-                            <li>✅ Công thức Excel tự động tính tổng cộng</li>
-                            <li>✅ Thông tin đầy đủ: Bộ phận, Chức vụ, Chi tiết thu chi</li>
-                            <li>✅ Header chuyên nghiệp với merge cells</li>
-                        </ul>
-                        <p class="text-muted small">File: <code>${fileName}</code></p>
-                        <div class="alert alert-info py-2 mt-2" style="font-size: 12px;">
-                            <i class="fas fa-info-circle me-1"></i>
-                            <strong>Tổng lương tháng:</strong> <span class="fw-bold text-primary">${formatMoney(totalStats.totalNetSalary, true)}</span>
-                        </div>
-                    </div>
-                `,
-                confirmButtonText: 'Đóng',
-                confirmButtonColor: '#28a745',
-                width: '600px'
+                icon: 'warning',
+                title: 'Thiếu thông tin',
+                text: 'Vui lòng chọn tháng và năm để xuất Excel',
+                confirmButtonColor: '#ffc107'
             });
-
-        } catch (error) {
-            console.error('Lỗi xuất Excel bảng lương:', error);
-            Swal.fire({
-                icon: 'error',
-                title: 'Lỗi xuất Excel',
-                text: 'Có lỗi xảy ra khi tạo file Excel: ' + error.message,
-                confirmButtonColor: '#dc3545'
-            });
+            return;
         }
-    }, 100);
+
+        Swal.fire({
+            icon: 'info',
+            title: 'Xuất Excel',
+            text: 'Đang chuẩn bị file Excel bảng lương tháng ' + month + '/' + year + '...',
+            timer: 2000,
+            showConfirmButton: false
+        });
+
+        setTimeout(function() {
+            try {
+                var data = GLOBAL_DATA['BangLuongThang'] || [];
+                
+                // Lọc dữ liệu theo tháng/năm
+                var filteredData = data.filter(function(r) {
+                    if (r['Delete'] === 'X') return false;
+                    var recordMonth = parseInt(r['Thang'] || r['Tháng']) || 0;
+                    var recordYear = parseInt(r['Nam'] || r['Năm']) || 0;
+                    return recordMonth === parseInt(month) && recordYear === parseInt(year);
+                });
+
+                if (filteredData.length === 0) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Không có dữ liệu',
+                        text: 'Không có dữ liệu lương cho tháng/năm đã chọn',
+                        confirmButtonColor: '#ffc107'
+                    });
+                    return;
+                }
+
+                // Tạo workbook
+                var wb = XLSX.utils.book_new();
+                var wsData = [];
+                
+                // Tiêu đề
+                wsData.push(['BẢNG LƯƠNG THÁNG ' + month + '/' + year + ' - CÔNG TY CON ĐƯỜNG XANH']);
+                wsData.push([]);
+                
+                // Header
+                wsData.push([
+                    'STT', 'Mã NV', 'Họ và tên', 'Tháng', 'Năm',
+                    'Số giờ công', 'Số giờ TC', 'Lương cơ bản', 'Tiền tăng ca',
+                    'Phụ cấp', 'Thưởng', 'Tổng thu', 'Tạm ứng', 'Thực lĩnh'
+                ]);
+                
+                // Dữ liệu nhân viên
+                filteredData.forEach(function(record, index) {
+                    var basicSalary = parseFloat(record['TongLuongCoBan']) || 0;
+                    var overtimePay = parseFloat(record['TongTienTangCa']) || 0;
+                    var allowance = parseFloat(record['TongPhuCap']) || 0;
+                    var bonus = parseFloat(record['TongThuong']) || 0;
+                    var totalIncome = basicSalary + overtimePay + allowance + bonus;
+                    var advance = parseFloat(record['TongTamUng']) || 0;
+                    var netSalary = totalIncome - advance;
+                    
+                    wsData.push([
+                        index + 1,
+                        record['ID_NhanVien'] || '',
+                        record['HoTen'] || record['Họ và tên'] || '',
+                        record['Thang'] || record['Tháng'] || '',
+                        record['Nam'] || record['Năm'] || '',
+                        parseFloat(record['TongGioCong']) || 0,
+                        parseFloat(record['TongGioTangCa']) || 0,
+                        basicSalary,
+                        overtimePay,
+                        allowance,
+                        bonus,
+                        totalIncome,
+                        advance,
+                        netSalary
+                    ]);
+                });
+
+                // Tạo worksheet và xuất
+                var ws = XLSX.utils.aoa_to_sheet(wsData);
+                XLSX.utils.book_append_sheet(wb, ws, 'Bảng lương');
+                var fileName = 'BangLuong_Thang' + month + '_' + year + '.xlsx';
+                XLSX.writeFile(wb, fileName);
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Thành công!',
+                    text: 'File Excel bảng lương đã được tải xuống: ' + fileName,
+                    confirmButtonColor: '#28a745'
+                });
+
+            } catch (exportError) {
+                console.error('Lỗi xuất Excel:', exportError);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Lỗi xuất Excel',
+                    text: 'Có lỗi xảy ra: ' + (exportError.message || 'Unknown error'),
+                    confirmButtonColor: '#dc3545'
+                });
+            }
+        }, 100);
+        
+    } catch (error) {
+        console.error('Lỗi general export:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Lỗi',
+            text: 'Không thể thực hiện xuất Excel',
+            confirmButtonColor: '#dc3545'
+        });
+    }
 }
 
 // --- POPUP CHI TIẾT LƯƠNG THEO ĐỊNH DẠNG MẪUI ---
@@ -3820,93 +3446,28 @@ function renderTable(data) {
         return;
     }
 
-    // Lấy các cột có dữ liệu hữu ích (loại bỏ cột trống và không cần thiết)
-    var allKeys = [];
+    // Lấy đủ cột từ tất cả dòng (tránh thiếu cột nếu dòng đầu không đủ)
+    var keys = [];
     activeData.forEach(function (r) {
         Object.keys(r).forEach(function (k) {
-            if (!skip.includes(k) && allKeys.indexOf(k) === -1) allKeys.push(k);
+            if (!skip.includes(k) && keys.indexOf(k) === -1) keys.push(k);
         });
     });
-    
-    // Lọc ra các cột có dữ liệu thật sự
-    var keys = allKeys.filter(function(key) {
-        // Loại bỏ các cột hệ thống không cần thiết
-        if (['Delete', 'delete', 'DELETE', 'created_at', 'updated_at', 'CreatedAt', 'UpdatedAt'].includes(key)) {
-            return false;
-        }
-        
-        // Kiểm tra cột có dữ liệu hữu ích không
-        var hasUsefulData = activeData.some(function(row) {
-            var value = row[key];
-            return value !== null && value !== undefined && 
-                   value !== '' && value !== 0 && 
-                   String(value).trim() !== '' &&
-                   String(value).toLowerCase() !== 'null' &&
-                   String(value).toLowerCase() !== 'undefined';
-        });
-        
-        return hasUsefulData;
-    });
-    
     if (keys.length === 0) keys = Object.keys(activeData[0] || {}).filter(function (k) { return !skip.includes(k); });
 
-    // Tạo header với width tối ưu và thanh trượt ngang
     var trH = document.createElement('tr');
-    
-    keys.forEach(k => { 
-        var t = document.createElement('th'); 
-        t.innerText = COLUMN_MAP[k] || k;
-        t.className = 'sticky-header';
-        
-        // Set width tối ưu cho từng cột
-        var optimalWidth = getOptimalColumnWidth(activeData, k);
-        t.style.minWidth = optimalWidth;
-        t.style.maxWidth = k.toLowerCase().includes('mô tả') || k.toLowerCase().includes('ghi chú') ? '300px' : '250px';
-        
-        // Căn lề cho header
-        if (isMoneyField(k) || isNumericField(k)) {
-            t.className += ' text-end';
-        } else {
-            t.className += ' text-center';
-        }
-        
-        trH.appendChild(t); 
-    });
-    
-    // Thêm cột thao tác
-    var actionTh = document.createElement('th');
-    actionTh.innerText = 'Thao tác';
-    actionTh.className = 'sticky-header text-center';
-    actionTh.style.minWidth = '100px';
-    actionTh.style.width = '100px';
-    actionTh.style.position = 'sticky';
-    actionTh.style.right = '0';
-    actionTh.style.backgroundColor = 'var(--primary-color)';
-    actionTh.style.zIndex = '25';
-    trH.appendChild(actionTh);
-    
+    keys.forEach(k => { var t = document.createElement('th'); t.innerText = COLUMN_MAP[k] || k; trH.appendChild(t); });
+    trH.appendChild(document.createElement('th'));
     th.appendChild(trH);
-    
-    // Đảm bảo table có class để kích hoạt horizontal scroll
-    var table = document.getElementById('data-table');
-    if (table) {
-        table.classList.add('table-with-horizontal-scroll');
-        // Tính toán tổng width để đảm bảo có scroll
-        var totalWidth = keys.length * 100 + 100; // Ước tính
-        if (totalWidth > 800) {
-            table.style.minWidth = totalWidth + 'px';
-        }
-    }
 
     activeData.forEach((r) => {
         var absoluteIdx = data.indexOf(r);
         var tr = document.createElement('tr');
         tr.style.cursor = 'pointer';
-        tr.className = 'table-row-with-scroll';
-        
         keys.forEach(k => {
-            var td = document.createElement('td');
-            var v = r[k];
+            if (!skip.includes(k)) {
+                var td = document.createElement('td');
+                var v = r[k];
 
                 // Resolve foreign key trước tiên
                 v = resolveForeignKey(k, v);
@@ -3940,155 +3501,22 @@ function renderTable(data) {
             }
         });
 
-        // Cột thao tác với sticky positioning
-        var tdA = document.createElement('td'); 
-        tdA.className = 'text-center action-column-sticky';
-        tdA.style.position = 'sticky';
-        tdA.style.right = '0';
-        tdA.style.backgroundColor = '#f8f9fa';
-        tdA.style.borderLeft = '2px solid var(--primary-color)';
-        tdA.style.zIndex = '20';
-        tdA.style.minWidth = '100px';
-        tdA.style.width = '100px';
-        
-        var btnGroup = document.createElement('div'); 
-        btnGroup.className = 'btn-group';
+        var tdA = document.createElement('td'); tdA.className = 'text-center sticky-col';
+        var btnGroup = document.createElement('div'); btnGroup.className = 'btn-group';
 
-        var btnEdit = document.createElement('button'); 
-        btnEdit.className = 'btn btn-xs btn-outline-success'; 
-        btnEdit.innerHTML = '<i class="fas fa-pen"></i>'; 
-        btnEdit.title = 'Sửa';
+        var btnEdit = document.createElement('button'); btnEdit.className = 'btn btn-sm btn-light border text-success shadow-sm'; btnEdit.innerHTML = '<i class="fas fa-pen"></i>'; btnEdit.title = 'Sửa';
         btnEdit.onclick = (e) => { e.stopPropagation(); openEditModal(absoluteIdx); };
 
-        var btnDel = document.createElement('button'); 
-        btnDel.className = 'btn btn-xs btn-outline-danger'; 
-        btnDel.innerHTML = '<i class="fas fa-trash-alt"></i>'; 
-        btnDel.title = 'Xóa';
+        var btnDel = document.createElement('button'); btnDel.className = 'btn btn-sm btn-light border text-danger shadow-sm'; btnDel.innerHTML = '<i class="fas fa-trash-alt"></i>'; btnDel.title = 'Xóa';
         btnDel.onclick = (e) => { e.stopPropagation(); deleteRow(absoluteIdx); };
 
-        btnGroup.appendChild(btnEdit); 
-        btnGroup.appendChild(btnDel);
-        tdA.appendChild(btnGroup); 
-        tr.appendChild(tdA);
+        btnGroup.appendChild(btnEdit); btnGroup.appendChild(btnDel);
+        tdA.appendChild(btnGroup); tr.appendChild(tdA);
 
         tr.onclick = () => showRowDetail(r, CURRENT_SHEET, absoluteIdx);
         tb.appendChild(tr);
     });
-    
-    // Tối ưu hóa hiển thị bảng và setup scroll indicators
-    setTimeout(() => {
-        optimizeTableDisplay();
-        setupTableScrollIndicators();
-        
-        // Thêm compact class nếu có quá nhiều cột
-        var table = document.getElementById('data-table');
-        if (table && keys.length > 10) {
-            table.classList.add('compact');
-        }
-        
-        // Kiểm tra và thêm shadow indicator
-        var container = table?.closest('.table-scroll, .table-responsive');
-        if (container && container.scrollWidth > container.clientWidth) {
-            container.classList.add('has-horizontal-scroll');
-        }
-    }, 50);
 }
-
-// === RESPONSIVE TABLE MANAGEMENT ===
-function setupResponsiveTableBehavior() {
-    var table = document.getElementById('data-table');
-    if (!table) return;
-    
-    var container = table.closest('.table-scroll, .table-responsive');
-    if (!container) return;
-    
-    // Theo dõi scroll để hiện/ẩn action column
-    container.addEventListener('scroll', function() {
-        var isScrolledToRight = (container.scrollLeft + container.clientWidth) >= container.scrollWidth - 10;
-        var actionColumns = table.querySelectorAll('.action-column-sticky');
-        
-        actionColumns.forEach(col => {
-            if (isScrolledToRight) {
-                col.style.borderLeft = '2px solid #28a745';
-                col.style.backgroundColor = '#f0f8f0';
-            } else {
-                col.style.borderLeft = '2px solid var(--primary-color)';
-                col.style.backgroundColor = '#f8f9fa';
-            }
-        });
-    });
-    
-    // Double tap để fit table
-    var lastTap = 0;
-    table.addEventListener('touchend', function(e) {
-        var currentTime = new Date().getTime();
-        var tapLength = currentTime - lastTap;
-        if (tapLength < 500 && tapLength > 0) {
-            // Double tap detected
-            toggleTableFitMode(table, container);
-            e.preventDefault();
-        }
-        lastTap = currentTime;
-    });
-}
-
-function toggleTableFitMode(table, container) {
-    if (table.classList.contains('fit-mode')) {
-        // Trở về chế độ bình thường
-        table.classList.remove('fit-mode');
-        table.style.minWidth = '';
-        optimizeTableDisplay();
-        
-        // Toast notification
-        if (typeof Swal !== 'undefined') {
-            const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1000 });
-            Toast.fire({ icon: 'info', title: 'Chế độ bình thường' });
-        }
-    } else {
-        // Chế độ fit toàn màn hình
-        table.classList.add('fit-mode');
-        table.style.minWidth = container.clientWidth + 'px';
-        
-        // Điều chỉnh width cột cho vừa màn hình
-        var headers = table.querySelectorAll('th:not(.action-column-sticky)');
-        var availableWidth = container.clientWidth - 100; // Trừ action column
-        var avgWidth = Math.floor(availableWidth / headers.length);
-        
-        headers.forEach(th => {
-            th.style.width = avgWidth + 'px';
-            th.style.maxWidth = avgWidth + 'px';
-        });
-        
-        // Toast notification
-        if (typeof Swal !== 'undefined') {
-            const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1000 });
-            Toast.fire({ icon: 'info', title: 'Chế độ vừa màn hình' });
-        }
-    }
-}
-
-// === GỌI SETUP KHI TRANG LOAD ===
-document.addEventListener('DOMContentLoaded', function() {
-    // Setup responsive behavior cho tất cả table
-    setTimeout(setupResponsiveTableBehavior, 1000);
-    
-    // Theo dõi thay đổi kích thước màn hình
-    window.addEventListener('resize', function() {
-        setTimeout(() => {
-            optimizeTableDisplay();
-            setupTableScrollIndicators();
-        }, 100);
-    });
-});
-
-// Gọi khi switch tab
-document.addEventListener('tabSwitched', function() {
-    setTimeout(() => {
-        optimizeTableDisplay();
-        setupTableScrollIndicators();
-        setupResponsiveTableBehavior();
-    }, 200);
-});
 
 function formatSafeDate(d) {
     if (!d || d === 'Invalid Date') return '';
