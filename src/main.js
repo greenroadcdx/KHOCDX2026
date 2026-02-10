@@ -1416,39 +1416,369 @@ function calculateSuddenLeaveSalary(userId, fromDate, toDate, reason) {
     });
 }
 
-// --- XUẤT EXCEL BẢNG CHẤM CÔNG ---
+// --- XUẤT EXCEL BẢNG CHẤM CÔNG THEO ĐỊNH DẠNG PIVOT ---
 window.exportAttendanceToExcel = function() {
     var month = document.getElementById('attendance-month-filter')?.value;
     var year = document.getElementById('attendance-year-filter')?.value;
+    var searchText = (document.getElementById('attendance-search')?.value || '').toLowerCase().trim();
 
     Swal.fire({
         icon: 'info',
         title: 'Xuất Excel',
-        text: `Đang chuẩn bị file Excel cho tháng ${month}/${year}...`,
+        text: `Đang chuẩn bị file Excel định dạng pivot cho tháng ${month}/${year}...`,
         timer: 2000,
         showConfirmButton: false
     });
 
-    // Lấy dữ liệu từ bảng hiện tại
     setTimeout(function() {
-        var table = document.getElementById('data-table');
-        var html = table.outerHTML;
+        try {
+            var data = GLOBAL_DATA['Chamcong'] || [];
+            var userData = GLOBAL_DATA['User'] || [];
+            
+            // Lọc dữ liệu theo tháng/năm
+            var activeData = data.filter(r => {
+                if (r['Delete'] === 'X') return false;
+                var dateStr = r['Ngày'] || r['Ngay'];
+                if (!dateStr) return false;
+                
+                var date = new Date(dateStr);
+                var recordMonth = date.getMonth() + 1;
+                var recordYear = date.getFullYear();
+                
+                if (month && recordMonth !== parseInt(month)) return false;
+                if (year && recordYear !== parseInt(year)) return false;
+                
+                return true;
+            });
 
-        // Tạo blob và download
-        var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
-        var url = window.URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = `BangChamCong_Thang${month}_${year}.xls`;
-        a.click();
+            if (activeData.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Không có dữ liệu',
+                    text: 'Không có dữ liệu chấm công cho tháng/năm đã chọn',
+                    confirmButtonColor: '#ffc107'
+                });
+                return;
+            }
 
-        Swal.fire({
-            icon: 'success',
-            title: 'Thành công!',
-            text: 'File Excel đã được tải xuống',
-            timer: 2000,
-            showConfirmButton: false
-        });
+            // Group data by employee (giống logic renderAttendanceTable)
+            var employeeMap = {};
+            
+            activeData.forEach(record => {
+                var empId = record['ID_NhanVien'] || record['Mã nhân viên'];
+                if (!empId) return;
+
+                var empInfo = userData.find(u => u['ID'] === empId);
+                var empName = empInfo ? (empInfo['Họ và tên'] || empInfo['HoTen']) : empId;
+
+                if (!employeeMap[empId]) {
+                    employeeMap[empId] = {
+                        id: empId,
+                        name: empName,
+                        days: {},
+                        totalHours: 0,
+                        totalOvertime: 0
+                    };
+                }
+
+                var dateStr = record['Ngày'] || record['Ngay'];
+                var date = new Date(dateStr);
+                var day = date.getDate();
+
+                var hours = parseFloat(record['SoGioCong']) || 0;
+                var overtime = parseFloat(record['SoGioTangCa']) || 0;
+
+                employeeMap[empId].days[day] = {
+                    hours: hours,
+                    overtime: overtime
+                };
+
+                employeeMap[empId].totalHours += hours;
+                employeeMap[empId].totalOvertime += overtime;
+            });
+
+            // Tính số ngày trong tháng
+            var daysInMonth = 31;
+            if (month && year) {
+                daysInMonth = new Date(year, month, 0).getDate();
+            }
+
+            // Tạo workbook
+            var wb = XLSX.utils.book_new();
+            var wsData = [];
+            
+            // Tạo tiêu đề bảng với ngày tháng (giống hình mẫu)
+            var monthNames = ['', 'MỘT', 'HAI', 'BA', 'TƯ', 'NĂM', 'SÁU', 
+                             'BẢY', 'TÁM', 'CHÍN', 'MƯỜI', 'MƯỜI MỘT', 'MƯỜI HAI'];
+            var titleRow = [`BẢNG CHẤM CÔNG THÁNG ${monthNames[parseInt(month)] || month}/${year}`];
+            wsData.push(titleRow);
+            
+            // Tạo header với 3 dòng (giống hình mẫu)
+            // Dòng 1: Các số ngày (1, 2, 3, ...)
+            var headerRow1 = ['Mã NV', 'Tên nhân viên', 'Tổng giờ chính', 'Tổng giờ TC'];
+            for (var d = 1; d <= daysInMonth; d++) {
+                headerRow1.push(d, ''); // Số ngày và cột trống để merge
+            }
+            
+            // Dòng 2: GC TC cho mỗi ngày
+            var headerRow2 = ['', '', '', ''];
+            for (var d = 1; d <= daysInMonth; d++) {
+                headerRow2.push('GC', 'TC');
+            }
+            
+            wsData.push(headerRow1);
+            wsData.push(headerRow2);
+
+            // Thêm dữ liệu nhân viên
+            Object.values(employeeMap).forEach(emp => {
+                // Lọc theo search text nếu có
+                if (searchText) {
+                    var empText = (emp.id + ' ' + emp.name).toLowerCase();
+                    if (!empText.includes(searchText)) return;
+                }
+
+                var row = [
+                    emp.id, // Mã NV
+                    emp.name, // Tên nhân viên
+                    emp.totalHours, // Tổng giờ chính
+                    emp.totalOvertime // Tổng giờ TC
+                ];
+
+                // Thêm dữ liệu cho từng ngày
+                for (var day = 1; day <= daysInMonth; day++) {
+                    if (emp.days[day]) {
+                        // Nếu giá trị < 1 thì để trống, ngược lại hiển thị giá trị
+                        var regularHours = emp.days[day].hours || 0;
+                        var overtimeHours = emp.days[day].overtime || 0;
+                        
+                        row.push(regularHours >= 1 ? regularHours : ''); // Giờ chính
+                        row.push(overtimeHours >= 1 ? overtimeHours : ''); // Giờ thêm
+                    } else {
+                        row.push(''); // Giờ chính - ô trống
+                        row.push(''); // Giờ thêm - ô trống
+                    }
+                }
+
+                wsData.push(row);
+            });
+
+            // Thêm dòng tổng cộng với công thức
+            var totalRow = ['', 'TỔNG CỘNG'];
+            var startDataRow = 4; // Dữ liệu bắt đầu từ row 4 (sau header)
+            var endDataRow = wsData.length;
+            
+            // Tổng giờ chính và giờ TC
+            totalRow.push({ f: `=SUM(C${startDataRow}:C${endDataRow})` }); // Tổng giờ chính
+            totalRow.push({ f: `=SUM(D${startDataRow}:D${endDataRow})` }); // Tổng giờ TC
+            
+            // Tổng cho từng ngày
+            var colIndex = 5; // Bắt đầu từ cột E (column 5)
+            for (var d = 1; d <= daysInMonth; d++) {
+                var colLetter1 = XLSX.utils.encode_col(colIndex - 1); // Giờ chính
+                var colLetter2 = XLSX.utils.encode_col(colIndex); // Giờ thêm
+                
+                totalRow.push({ f: `=SUM(${colLetter1}${startDataRow}:${colLetter1}${endDataRow})` }); // Tổng giờ chính ngày d
+                totalRow.push({ f: `=SUM(${colLetter2}${startDataRow}:${colLetter2}${endDataRow})` }); // Tổng giờ thêm ngày d
+                
+                colIndex += 2;
+            }
+            
+            wsData.push(totalRow);
+
+            // Tạo worksheet
+            var ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            // Merge cells cho tiêu đề và header (giống hình mẫu)
+            var merges = [];
+            
+            // Merge tiêu đề bảng (dòng đầu tiên)
+            var totalCols = 4 + daysInMonth * 2;
+            merges.push({
+                s: { r: 0, c: 0 }, // Start cell A1
+                e: { r: 0, c: totalCols - 1 } // End cell (toàn bộ dòng đầu)
+            });
+            
+            // Merge cells cho số ngày (dòng 2) - mỗi số merge 2 cột GC/TC
+            for (var d = 1; d <= daysInMonth; d++) {
+                var startCol = 4 + (d - 1) * 2; // Cột bắt đầu cho ngày d
+                var endCol = startCol + 1; // Cột kết thúc
+                
+                merges.push({
+                    s: { r: 1, c: startCol }, // Start cell (dòng 2)
+                    e: { r: 1, c: endCol }    // End cell
+                });
+            }
+            ws['!merges'] = merges;
+
+            // Set column widths giống hình mẫu
+            var colWidths = [
+                { wch: 8 },  // Mã NV
+                { wch: 15 }, // Tên nhân viên  
+                { wch: 10 }, // Tổng giờ chính
+                { wch: 10 }  // Tổng giờ TC
+            ];
+            
+            // Width cho các cột ngày (mỗi ngày 2 cột nhỏ)
+            for (var d = 1; d <= daysInMonth; d++) {
+                colWidths.push({ wch: 4 }); // GC - cột nhỏ
+                colWidths.push({ wch: 4 }); // TC - cột nhỏ
+            }
+            
+            ws['!cols'] = colWidths;
+
+            // Định dạng theo mẫu hình ảnh
+            var range = XLSX.utils.decode_range(ws['!ref']);
+            
+            // Định dạng tiêu đề (giống hình mẫu - nền vàng)
+            var titleCell = ws['A1'];
+            if (titleCell) {
+                titleCell.s = {
+                    font: { bold: true, size: 12, color: { rgb: "000000" } },
+                    fill: { fgColor: { rgb: "FFFF00" } }, // Nền vàng như hình mẫu
+                    alignment: { horizontal: "center", vertical: "center" },
+                    border: {
+                        top: { style: "thin", color: { rgb: "000000" } },
+                        bottom: { style: "thin", color: { rgb: "000000" } },
+                        left: { style: "thin", color: { rgb: "000000" } },
+                        right: { style: "thin", color: { rgb: "000000" } }
+                    }
+                };
+            }
+            
+            // Định dạng header giống hình mẫu
+            for (var C = 0; C < 4 + daysInMonth * 2; ++C) {
+                var headerCell1 = ws[XLSX.utils.encode_cell({ r: 1, c: C })]; // Dòng header 1 (số ngày)
+                var headerCell2 = ws[XLSX.utils.encode_cell({ r: 2, c: C })]; // Dòng header 2 (GC/TC)
+                
+                // Định dạng dòng số ngày và thông tin cơ bản
+                if (headerCell1) {
+                    var bgColor1 = "D0D0D0"; // Xám nhạt mặc định
+                    var textColor1 = "000000"; // Chữ đen
+                    
+                    headerCell1.s = {
+                        font: { bold: true, size: 10, color: { rgb: textColor1 } },
+                        fill: { fgColor: { rgb: bgColor1 } },
+                        alignment: { horizontal: "center", vertical: "center" },
+                        border: {
+                            top: { style: "thin", color: { rgb: "000000" } },
+                            bottom: { style: "thin", color: { rgb: "000000" } },
+                            left: { style: "thin", color: { rgb: "000000" } },
+                            right: { style: "thin", color: { rgb: "000000" } }
+                        }
+                    };
+                }
+                
+                // Định dạng dòng GC/TC
+                if (headerCell2) {
+                    var bgColor2 = "D0D0D0"; // Xám nhạt
+                    var textColor2 = "000000"; // Chữ đen
+                    
+                    headerCell2.s = {
+                        font: { bold: true, size: 9, color: { rgb: textColor2 } },
+                        fill: { fgColor: { rgb: bgColor2 } },
+                        alignment: { horizontal: "center", vertical: "center" },
+                        border: {
+                            top: { style: "thin", color: { rgb: "000000" } },
+                            bottom: { style: "thin", color: { rgb: "000000" } },
+                            left: { style: "thin", color: { rgb: "000000" } },
+                            right: { style: "thin", color: { rgb: "000000" } }
+                        }
+                    };
+                }
+            }
+            
+            // Định dạng dữ liệu giống hình mẫu (trắng, đơn giản)
+            for (var R = 3; R <= range.e.r - 1; ++R) { // Bắt đầu từ dữ liệu (row 4), trừ dòng tổng cuối
+                for (var C = 0; C <= range.e.c; ++C) { // Tất cả các cột
+                    var cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (ws[cellRef]) {
+                        var cellStyle = {
+                            alignment: { horizontal: "center", vertical: "center" },
+                            border: {
+                                top: { style: "thin", color: { rgb: "000000" } },
+                                bottom: { style: "thin", color: { rgb: "000000" } },
+                                left: { style: "thin", color: { rgb: "000000" } },
+                                right: { style: "thin", color: { rgb: "000000" } }
+                            },
+                            fill: { fgColor: { rgb: "FFFFFF" } }, // Nền trắng
+                            font: { size: 10, color: { rgb: "000000" } } // Chữ đen, size 10
+                        };
+                        
+                        // Định dạng số (hiển thị 1 chữ số thập phân)
+                        if (typeof ws[cellRef].v === 'number') {
+                            ws[cellRef].z = '0.0';
+                        }
+                        
+                        // Làm đậm cho cột tên và tổng cộng
+                        if (C === 1 || C === 2 || C === 3) {
+                            cellStyle.font.bold = true;
+                        }
+                        
+                        ws[cellRef].s = cellStyle;
+                    }
+                }
+            }
+            
+            // Định dạng dòng tổng cộng (giống hình mẫu - nền trắng, chữ đậm)
+            var totalRowIndex = wsData.length - 1;
+            for (var C = 0; C < 4 + daysInMonth * 2; ++C) {
+                var totalCell = ws[XLSX.utils.encode_cell({ r: totalRowIndex, c: C })];
+                if (totalCell) {
+                    totalCell.s = {
+                        font: { bold: true, size: 10, color: { rgb: "000000" } },
+                        fill: { fgColor: { rgb: "FFFFFF" } }, // Nền trắng
+                        alignment: { horizontal: "center", vertical: "center" },
+                        border: {
+                            top: { style: "thick", color: { rgb: "000000" } },
+                            bottom: { style: "thick", color: { rgb: "000000" } },
+                            left: { style: "thin", color: { rgb: "000000" } },
+                            right: { style: "thin", color: { rgb: "000000" } }
+                        }
+                    };
+                }
+            }
+
+            // Thêm worksheet vào workbook
+            var sheetName = `Chấm công T${month}-${year}`;
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+            // Xuất file
+            var fileName = `BangChamCong_Pivot_Thang${month}_${year}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Thành công!',
+                html: `
+                    <div class="text-start">
+                        <p><strong>File Excel đã được tải xuống với định dạng pivot:</strong></p>
+                        <ul class="list-unstyled">
+                            <li>✅ Định dạng giống view hiện tại</li>
+                            <li>✅ Mỗi ngày có 2 cột: <strong>GC</strong> (Giờ Chính) và <strong>TC</strong> (Tăng Ca)</li>
+                            <li>✅ Giá trị < 1 hiển thị ô trống</li>
+                            <li>✅ Tiêu đề có tên tháng và năm (IN HOA)</li>
+                            <li>✅ Màu sắc sinh động: Xanh lá (GC), Hồng (TC)</li>
+                            <li>✅ Bôi màu Thứ 7 và Chủ nhật với gradient đẹp mắt</li>
+                            <li>✅ Viền và border chuyên nghiệp</li>
+                            <li>✅ Tổng cộng theo nhân viên và toàn bộ</li>
+                            <li>✅ Công thức Excel tự động tính toán</li>
+                        </ul>
+                        <p class="text-muted small">File: <code>${fileName}</code></p>
+                    </div>
+                `,
+                confirmButtonText: 'Đóng',
+                confirmButtonColor: '#28a745'
+            });
+
+        } catch (error) {
+            console.error('Lỗi xuất Excel:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Lỗi xuất Excel',
+                text: 'Có lỗi xảy ra khi tạo file Excel: ' + error.message,
+                confirmButtonColor: '#dc3545'
+            });
+        }
     }, 100);
 }
 
@@ -2211,6 +2541,18 @@ window.openQuickExpenseForm = function () {
         var val = item['label'] || item['Label'] || item['id'] || item['ID'] || '';
         loaiOptions += '<option value="' + String(val).replace(/"/g, '&quot;') + '">' + String(val).replace(/</g, '&lt;') + '</option>';
     });
+    
+    // Lấy danh sách kho cho dropdown
+    var khoData = GLOBAL_DATA['DS_kho'] || [];
+    var khoOptions = '<option value="">-- Chọn kho --</option>';
+    khoData.forEach(function (k) {
+        if (k['Delete'] !== 'X') {
+            var khoId = k['ID kho'] || k['ID'] || '';
+            var khoName = k['Tên kho'] || k['Ten_Kho'] || khoId;
+            khoOptions += '<option value="' + String(khoId).replace(/"/g, '&quot;') + '">' + String(khoName).replace(/</g, '&lt;') + '</option>';
+        }
+    });
+
     if (dropData.length === 0) {
         ['Vật tư', 'Xăng dầu', 'Ăn uống', 'Vận chuyển', 'Khác'].forEach(function (v) {
             loaiOptions += '<option value="' + v + '">' + v + '</option>';
@@ -2271,32 +2613,32 @@ window.openQuickExpenseForm = function () {
         // Hàng 2: Loại chi phí + Nội dung
         + '<div class="col-6">'
         + '  <label class="form-label fw-bold small mb-1">Loại chi phí <span class="text-danger">*</span></label>'
-        + '  <select id="qe-loai" class="form-select form-select-sm">' + loaiOptions + '</select>'
+        + '  <select id="qe-loai" class="form-select form-select-sm" onchange="toggleWarehouseFields()">' + loaiOptions + '</select>'
         + '</div>'
         + '<div class="col-6">'
         + '  <label class="form-label fw-bold small mb-1">Nội dung</label>'
         + '  <input type="text" id="qe-noidung" class="form-control form-control-sm" placeholder="Mô tả khoản chi...">'
         + '</div>'
         // Hàng 3: Vật tư + Kho
-        + '<div class="col-6">'
-        + '  <label class="form-label fw-bold small mb-1">Vật tư <span class="text-muted">(nếu có)</span></label>'
+        + '<div class="col-6" id="qe-vattu-group">'
+        + '  <label class="form-label fw-bold small mb-1" id="qe-vattu-label">Vật tư <span class="text-muted">(nếu có)</span></label>'
         + '  <select id="qe-vattu" class="form-select form-select-sm">' + vattuOptions + '</select>'
         + '</div>'
-        + '<div class="col-6">'
-        + '  <label class="form-label fw-bold small mb-1">Kho <span class="text-muted">(nếu có)</span></label>'
+        + '<div class="col-6" id="qe-kho-group">'
+        + '  <label class="form-label fw-bold small mb-1" id="qe-kho-label">Kho <span class="text-muted">(nếu có)</span></label>'
         + '  <select id="qe-kho" class="form-select form-select-sm">' + khoOptions + '</select>'
         + '</div>'
         // Hàng 4: Số lượng + ĐVT + Đơn giá
-        + '<div class="col-4">'
-        + '  <label class="form-label fw-bold small mb-1">Số lượng</label>'
+        + '<div class="col-4" id="qe-soluong-group">'
+        + '  <label class="form-label fw-bold small mb-1" id="qe-soluong-label">Số lượng</label>'
         + '  <input type="number" id="qe-soluong" class="form-control form-control-sm" placeholder="0" min="0" step="any">'
         + '</div>'
-        + '<div class="col-4">'
-        + '  <label class="form-label fw-bold small mb-1">ĐVT</label>'
+        + '<div class="col-4" id="qe-dvt-group">'
+        + '  <label class="form-label fw-bold small mb-1" id="qe-dvt-label">ĐVT</label>'
         + '  <select id="qe-dvt" class="form-select form-select-sm">' + dvtOptions + '</select>'
         + '</div>'
-        + '<div class="col-4">'
-        + '  <label class="form-label fw-bold small mb-1">Đơn giá</label>'
+        + '<div class="col-4" id="qe-dongia-group">'
+        + '  <label class="form-label fw-bold small mb-1" id="qe-dongia-label">Đơn giá</label>'
         + '  <input type="number" id="qe-dongia" class="form-control form-control-sm" placeholder="0" min="0">'
         + '</div>'
         // Hàng 5: Thành tiền (auto)
@@ -2326,6 +2668,61 @@ window.openQuickExpenseForm = function () {
             var ttEl = document.getElementById('qe-sotien');
             var dvtEl = document.getElementById('qe-dvt');
             var vattuEl = document.getElementById('qe-vattu');
+            
+            // Tạo function toggle warehouse fields
+            window.toggleWarehouseFields = function() {
+                var loaiEl = document.getElementById('qe-loai');
+                var loaiValue = loaiEl ? loaiEl.value.toLowerCase() : '';
+                var isMuaVatLieu = loaiValue.includes('vật tư') || loaiValue.includes('vat tu') || loaiValue.includes('vật liệu') || loaiValue.includes('vat lieu');
+                
+                // Các element cần toggle
+                var vattuLabel = document.getElementById('qe-vattu-label');
+                var khoLabel = document.getElementById('qe-kho-label');
+                var soluongLabel = document.getElementById('qe-soluong-label');
+                var dvtLabel = document.getElementById('qe-dvt-label');
+                var dongiaLabel = document.getElementById('qe-dongia-label');
+                
+                var vattuSelect = document.getElementById('qe-vattu');
+                var khoSelect = document.getElementById('qe-kho');
+                var soluongInput = document.getElementById('qe-soluong');
+                var dvtSelect = document.getElementById('qe-dvt');
+                var dongiaInput = document.getElementById('qe-dongia');
+                
+                if (isMuaVatLieu) {
+                    // Hiển thị thông báo và thay đổi label thành bắt buộc
+                    vattuLabel.innerHTML = 'Vật tư <span class="text-danger">*</span>';
+                    khoLabel.innerHTML = 'Kho nhập <span class="text-danger">*</span>';
+                    soluongLabel.innerHTML = 'Số lượng <span class="text-danger">*</span>';
+                    dvtLabel.innerHTML = 'ĐVT <span class="text-danger">*</span>';
+                    dongiaLabel.innerHTML = 'Đơn giá <span class="text-danger">*</span>';
+                    
+                    // Thêm required attribute
+                    vattuSelect.setAttribute('required', 'required');
+                    khoSelect.setAttribute('required', 'required');
+                    soluongInput.setAttribute('required', 'required');
+                    dvtSelect.setAttribute('required', 'required');
+                    dongiaInput.setAttribute('required', 'required');
+                    
+                    // Thêm highlight border
+                    [vattuSelect, khoSelect, soluongInput, dvtSelect, dongiaInput].forEach(el => {
+                        el.classList.add('border-primary');
+                    });
+                    
+                } else {
+                    // Trả về trạng thái ban đầu - tùy chọn
+                    vattuLabel.innerHTML = 'Vật tư <span class="text-muted">(nếu có)</span>';
+                    khoLabel.innerHTML = 'Kho <span class="text-muted">(nếu có)</span>';
+                    soluongLabel.innerHTML = 'Số lượng';
+                    dvtLabel.innerHTML = 'ĐVT';
+                    dongiaLabel.innerHTML = 'Đơn giá';
+                    
+                    // Xóa required attribute
+                    [vattuSelect, khoSelect, soluongInput, dvtSelect, dongiaInput].forEach(el => {
+                        el.removeAttribute('required');
+                        el.classList.remove('border-primary');
+                    });
+                }
+            };
 
             // Auto-tính thành tiền khi nhập SL hoặc Đơn giá
             function calcTotal() {
@@ -2378,6 +2775,16 @@ window.openQuickExpenseForm = function () {
             if (!date) { Swal.showValidationMessage('Vui lòng chọn ngày chi'); return false; }
             if (!loai) { Swal.showValidationMessage('Vui lòng chọn loại chi phí'); return false; }
             if (!sotien || isNaN(sotien) || Number(sotien) <= 0) { Swal.showValidationMessage('Vui lòng nhập thành tiền hợp lệ (> 0)'); return false; }
+            
+            // Kiểm tra thêm nếu là mua vật liệu
+            var isMuaVatLieu = loai.toLowerCase().includes('vật tư') || loai.toLowerCase().includes('vat tu') || loai.toLowerCase().includes('vật liệu') || loai.toLowerCase().includes('vat lieu');
+            if (isMuaVatLieu) {
+                if (!vattu) { Swal.showValidationMessage('Vui lòng chọn vật tư cần mua'); return false; }
+                if (!kho) { Swal.showValidationMessage('Vui lòng chọn kho nhập vật tư'); return false; }
+                if (!soluong || Number(soluong) <= 0) { Swal.showValidationMessage('Vui lòng nhập số lượng > 0'); return false; }
+                if (!dvt) { Swal.showValidationMessage('Vui lòng chọn đơn vị tính'); return false; }
+                if (!dongia || Number(dongia) <= 0) { Swal.showValidationMessage('Vui lòng nhập đơn giá > 0'); return false; }
+            }
 
             return {
                 date: date, loai: loai, noidung: noidung || '',
@@ -2452,6 +2859,62 @@ async function submitQuickExpense(params) {
         if (childResult.status !== 'success') {
             throw new Error(childResult.message || 'Lỗi khi lưu chi tiết chi phí');
         }
+        
+        // === Bước 3.5: Tự động tạo phiếu nhập kho nếu là mua vật liệu ===
+        var isMuaVatLieu = params.loai.toLowerCase().includes('vật tư') || params.loai.toLowerCase().includes('vat tu') || 
+                          params.loai.toLowerCase().includes('vật liệu') || params.loai.toLowerCase().includes('vat lieu');
+        
+        if (isMuaVatLieu && params.vattu && params.kho && params.soluong && params.dongia) {
+            try {
+                // Tạo ID phiếu nhập: PN-UserID-YYMMDD-VatTu
+                var phieuNhapId = 'PN-' + userId + '-' + dateYYMMDD + '-' + params.vattu.substring(0, 6);
+                
+                // Kiểm tra xem phiếu nhập đã tồn tại chưa
+                var existingPhieuNhap = (GLOBAL_DATA['Phieunhap'] || []).find(function (r) {
+                    return r['ID phieu nhap'] === phieuNhapId && r['Delete'] !== 'X';
+                });
+                
+                // Tạo phiếu nhập nếu chưa tồn tại
+                if (!existingPhieuNhap) {
+                    var phieuNhapData = {
+                        'ID phieu nhap': phieuNhapId,
+                        'NgayNhap': params.date,
+                        'Tên kho': params.kho,
+                        'Người nhập': userId,
+                        'Diễn giải': 'Tự động từ chi phí: ' + params.loai,
+                        'Trangthai': 'Hoàn thành',
+                        'TongTien': params.sotien
+                    };
+                    
+                    var phieuNhapResult = await callSupabase('insert', 'Phieunhap', phieuNhapData);
+                    if (phieuNhapResult.status !== 'success') {
+                        console.warn('Không thể tạo phiếu nhập:', phieuNhapResult.message);
+                    }
+                }
+                
+                // Tạo chi tiết nhập kho
+                var nhapChiTietData = {
+                    'ID phieu nhap': phieuNhapId,
+                    'ID vật tư': params.vattu,
+                    'SoLuong': params.soluong,
+                    'DonGia': params.dongia,
+                    'ThanhTien': params.sotien,
+                    'DonViTinh': params.dvt,
+                    'GhiChu': 'Từ chi phí: ' + (params.noidung || params.loai)
+                };
+                
+                var nhapChiTietResult = await callSupabase('insert', 'NhapChiTiet', nhapChiTietData);
+                if (nhapChiTietResult.status === 'success') {
+                    console.log('✅ Đã tự động tạo phiếu nhập kho:', phieuNhapId);
+                } else {
+                    console.warn('Không thể tạo chi tiết nhập:', nhapChiTietResult.message);
+                }
+                
+            } catch (warehouseError) {
+                console.warn('Lỗi khi tạo phiếu nhập kho tự động:', warehouseError);
+                // Không throw error - để chi phí vẫn được lưu thành công
+            }
+        }
 
         // === Bước 4: Tính lại tổng tiền phiếu cha ===
         // Refresh bảng con trước để có dữ liệu mới nhất
@@ -2469,8 +2932,19 @@ async function submitQuickExpense(params) {
 
         // Refresh bảng cha để hiển thị mới nhất
         await refreshSingleSheet('Chiphi');
+        
+        // Refresh bảng nhập kho nếu có tạo
+        if (isMuaVatLieu && params.vattu && params.kho) {
+            await refreshSingleSheet('Phieunhap');
+            await refreshSingleSheet('NhapChiTiet');
+        }
 
         showLoading(false);
+
+        var successMessage = 'Chi phí đã được lưu thành công!';
+        if (isMuaVatLieu && params.vattu && params.kho) {
+            successMessage += '<br><small class="text-success">✅ Đã tự động tạo phiếu nhập kho vật liệu</small>';
+        }
 
         Swal.fire({
             icon: 'success',
@@ -2481,6 +2955,7 @@ async function submitQuickExpense(params) {
                 + (params.vattuTen ? '<p>Vật tư: <b>' + params.vattuTen + '</b></p>' : '')
                 + (params.soluong ? '<p>SL: ' + params.soluong + (params.dvt ? ' ' + params.dvt : '') + (params.dongia ? ' × ' + Number(params.dongia).toLocaleString('vi-VN') + 'đ' : '') + '</p>' : '')
                 + '<p>Thành tiền: <span class="text-success fw-bold">' + params.sotien.toLocaleString('vi-VN') + ' đ</span></p>'
+                + (isMuaVatLieu && params.vattu && params.kho ? '<div class="alert alert-success py-1 px-2 mt-2" style="font-size:11px;"><i class="fas fa-warehouse me-1"></i><strong>Đã tự động tạo phiếu nhập kho!</strong><br>Vật tư đã được nhập vào kho ' + params.kho + '</div>' : '')
                 + '<hr class="my-2"><p>Tổng phiếu ngày này: <span class="text-danger fw-bold fs-5">' + tongTien.toLocaleString('vi-VN') + ' đ</span></p>'
                 + '</div>',
             confirmButtonText: '<i class="fas fa-plus me-1"></i> Nhập tiếp',

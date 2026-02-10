@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Cache - KHOCDX</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .danger { background: #dc3545; }
+        .danger:hover { background: #c82333; }
+        .success { background: #28a745; }
+        .success:hover { background: #218838; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; max-height: 300px; }
+        .cache-item { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Debug Cache - Hệ thống KHOCDX</h1>
+    
+    <div class="section">
+        <h3>📊 Thông tin Cache hiện tại</h3>
+        <button onclick="checkCache()">Kiểm tra Cache</button>
+        <button onclick="showGlobalData()">Xem GLOBAL_DATA Cache</button>
+        <div id="cache-info"></div>
+    </div>
+
+    <div class="section">
+        <h3>🧹 Làm sạch Cache</h3>
+        <button class="danger" onclick="clearAllCache()">Xóa toàn bộ Cache</button>
+        <button class="danger" onclick="clearDataCache()">Xóa chỉ Data Cache</button>
+        <button class="danger" onclick="clearUserSession()">Xóa User Session</button>
+        <div id="clear-result"></div>
+    </div>
+
+    <div class="section">
+        <h3>🔄 Test Supabase Connection</h3>
+        <button class="success" onclick="testSupabase()">Test kết nối Supabase</button>
+        <div id="supabase-result"></div>
+    </div>
+
+    <div class="section">
+        <h3>📋 Chi tiết Cache từng bảng</h3>
+        <div id="table-cache-details"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // Cấu hình Supabase (copy từ main.js)
+        const SUPABASE_URL = 'https://weipegqglhqsqvdzgztb.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndlaXBlZ3FnbGhxc3F2ZHpnenRiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzODcyNzAsImV4cCI6MjA4NTk2MzI3MH0.v9ylIEOGNrbTyDpjbWst4KoXtKL1cJ58A-LEkXKCd5Q';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const TABLE_MAP = {
+            "Chamcong": "Chamcong", "LichSuLuong": "LichSuLuong", "GiaoDichLuong": "GiaoDichLuong",
+            "BanGiaoCongCu": "BanGiaoCongCu", "Phieunhap": "PhieuNhap", "Phieuxuat": "PhieuXuat",
+            "XuatChiTiet": "XuatChiTiet", "Phieuchuyenkho": "Phieuchuyenkho", "NhapChiTiet": "NhapChiTiet",
+            "DS_kho": "DS_kho", "Vat_tu": "Vat_tu", "Tonkho": "Tonkho",
+            "Chuyenkhochitiet": "Chuyenkhochitiet", "Nhomvattu": "Nhomvattu", "BangLuongThang": "BangLuongThang",
+            "Notes": "Notes", "LichNhac": "LichNhac", "Chiphi": "Chiphi", "User": "User",
+            "Chiphichitiet": "Chiphichitiet", "Luongphucap": "Luongphucap", "Doitac": "Doitac",
+            "Drop": "Drop"
+        };
+
+        function checkCache() {
+            const info = document.getElementById('cache-info');
+            let html = '<h4>📦 LocalStorage Items:</h4>';
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                const size = new Blob([value]).size;
+                
+                html += `<div class="cache-item">
+                    <strong>${key}</strong> (${(size/1024).toFixed(2)} KB)
+                    <br><small>${value.substring(0, 100)}${value.length > 100 ? '...' : ''}</small>
+                </div>`;
+            }
+            
+            info.innerHTML = html;
+        }
+
+        function showGlobalData() {
+            const globalData = localStorage.getItem('GLOBAL_DATA_CACHE');
+            const info = document.getElementById('cache-info');
+            
+            if (globalData) {
+                try {
+                    const parsed = JSON.parse(globalData);
+                    let html = '<h4>🗂️ GLOBAL_DATA Cache:</h4>';
+                    
+                    Object.keys(parsed).forEach(table => {
+                        const data = parsed[table];
+                        const count = Array.isArray(data) ? data.length : 0;
+                        html += `<div class="cache-item">
+                            <strong>${table}</strong>: ${count} records
+                            ${count > 0 ? `<br><small>Sample: ${JSON.stringify(data[0]).substring(0, 150)}...</small>` : ''}
+                        </div>`;
+                    });
+                    
+                    info.innerHTML = html;
+                } catch (e) {
+                    info.innerHTML = `<div class="cache-item" style="color: red;">❌ Lỗi parse GLOBAL_DATA: ${e.message}</div>`;
+                }
+            } else {
+                info.innerHTML = '<div class="cache-item">ℹ️ Không có GLOBAL_DATA cache</div>';
+            }
+        }
+
+        function clearAllCache() {
+            localStorage.clear();
+            document.getElementById('clear-result').innerHTML = '<div style="color: green;">✅ Đã xóa toàn bộ cache!</div>';
+        }
+
+        function clearDataCache() {
+            // Xóa các cache liên quan đến data
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('cache_') || key === 'GLOBAL_DATA_CACHE') {
+                    keysToRemove.push(key);
+                }
+            }
+            
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+            document.getElementById('clear-result').innerHTML = `<div style="color: green;">✅ Đã xóa ${keysToRemove.length} data cache items!</div>`;
+        }
+
+        function clearUserSession() {
+            localStorage.removeItem('CURRENT_USER_SESSION');
+            document.getElementById('clear-result').innerHTML = '<div style="color: green;">✅ Đã xóa user session!</div>';
+        }
+
+        async function testSupabase() {
+            const result = document.getElementById('supabase-result');
+            result.innerHTML = '<div>🔄 Đang test kết nối...</div>';
+            
+            try {
+                // Test với bảng User
+                const { data, error } = await supabaseClient.from('User').select('*').limit(5);
+                
+                if (error) throw error;
+                
+                result.innerHTML = `
+                    <div style="color: green;">✅ Kết nối Supabase thành công!</div>
+                    <div>📊 Test bảng User: ${data.length} records</div>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                result.innerHTML = `
+                    <div style="color: red;">❌ Lỗi kết nối Supabase:</div>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        }
+
+        async function checkTableCache() {
+            const container = document.getElementById('table-cache-details');
+            let html = '<h4>📋 Chi tiết Cache từng bảng:</h4>';
+            
+            const tables = Object.keys(TABLE_MAP);
+            
+            for (const table of tables) {
+                const cacheKey = `cache_${table}`;
+                const cached = localStorage.getItem(cacheKey);
+                
+                if (cached) {
+                    try {
+                        const data = JSON.parse(cached);
+                        const count = Array.isArray(data) ? data.length : 0;
+                        html += `<div class="cache-item">
+                            <strong>${table}</strong>: ${count} records (cached)
+                            <button onclick="testTableLive('${table}')" style="margin-left: 10px; font-size: 12px;">Test Live</button>
+                        </div>`;
+                    } catch (e) {
+                        html += `<div class="cache-item" style="color: red;">
+                            <strong>${table}</strong>: Cache bị lỗi - ${e.message}
+                        </div>`;
+                    }
+                } else {
+                    html += `<div class="cache-item" style="color: orange;">
+                        <strong>${table}</strong>: Không có cache
+                        <button onclick="testTableLive('${table}')" style="margin-left: 10px; font-size: 12px;">Test Live</button>
+                    </div>`;
+                }
+            }
+            
+            container.innerHTML = html;
+        }
+
+        async function testTableLive(table) {
+            try {
+                const mappedTable = TABLE_MAP[table] || table;
+                const { data, error } = await supabaseClient.from(mappedTable).select('*').limit(3);
+                
+                if (error) throw error;
+                
+                alert(`✅ ${table} (${mappedTable}): ${data.length} records live\n\n${JSON.stringify(data, null, 2).substring(0, 500)}...`);
+            } catch (error) {
+                alert(`❌ Lỗi ${table}: ${error.message}`);
+            }
+        }
+
+        // Auto load khi trang được tải
+        window.onload = function() {
+            checkCache();
+            checkTableCache();
+        };
+    </script>
+</body>
+</html>
