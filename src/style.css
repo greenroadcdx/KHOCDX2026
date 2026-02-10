@@ -1455,7 +1455,7 @@ h6,
         display: none !important;
     }
 
-    /* Bottom navigation cho mobile */
+    /* Bottom navigation cho mobile - safe-area cho iPhone */
     .mobile-bottom-nav {
         position: fixed;
         bottom: 0;
@@ -1463,6 +1463,7 @@ h6,
         right: 0;
         background: white;
         border-top: 2px solid var(--primary-color);
+        padding-bottom: env(safe-area-inset-bottom, 0);
         display: flex;
         justify-content: center;
         align-items: center;

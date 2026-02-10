@@ -1049,6 +1049,27 @@ window.switchTab = function (id, el) {
                         <i class="fas fa-plus me-1"></i> Tạo phiếu thủ công
                     </button>
                 `;
+            } else if (item.sheet === 'Phieuxuat') {
+                extraButtons = `
+                    <button class="btn btn-danger rounded-pill fw-bold shadow-sm px-3 me-2" onclick="openQuickExportForm()">
+                        <i class="fas fa-arrow-circle-up me-1"></i> Xuất kho nhanh
+                    </button>
+                    <button class="btn btn-outline-secondary rounded-pill fw-bold shadow-sm px-3" onclick="openAddModal()">
+                        <i class="fas fa-plus me-1"></i> Tạo phiếu thủ công
+                    </button>
+                `;
+            } else if (item.sheet === 'Phieuchuyenkho') {
+                extraButtons = `
+                    <button class="btn btn-info text-white rounded-pill fw-bold shadow-sm px-3 me-2" onclick="openQuickTransferForm()">
+                        <i class="fas fa-exchange-alt me-1"></i> Chuyển kho nhanh
+                    </button>
+                    <button class="btn btn-outline-info rounded-pill fw-bold shadow-sm px-3 me-2" onclick="showTransferReport()">
+                        <i class="fas fa-chart-bar me-1"></i> Báo cáo
+                    </button>
+                    <button class="btn btn-outline-secondary rounded-pill fw-bold shadow-sm px-3" onclick="openAddModal()">
+                        <i class="fas fa-plus me-1"></i> Tạo phiếu thủ công
+                    </button>
+                `;
             } else {
                 extraButtons = `<button class="btn btn-success rounded-pill fw-bold shadow-sm px-3" onclick="openAddModal()"><i class="fas fa-plus me-1"></i> Thêm mới</button>`;
             }
@@ -4939,6 +4960,404 @@ async function submitQuickExpense(params) {
 }
 
 // =============================================
+// XUẤT KHO NHANH (Quick Warehouse Export)
+// Luồng: Nhập chi tiết xuất → tạo phiếu xuất + cập nhật tồn kho
+// ID phiếu: {ID nhân viên}-XK-{yymmdd} (VD: CDX001-XK-250824)
+// =============================================
+
+/** Helper: Build dropdown options cho Kho, Vật tư, User, ĐVT - dùng chung cho Xuất kho & Chuyển kho
+ *  Nguyên lý:
+ *  - Danh sách kho: chỉ những kho đang có vật tư tồn (Tonkho > 0)
+ *  - Danh sách vật tư: chỉ những vật tư còn tồn
+ */
+function buildWarehouseDropdowns() {
+    var tonkhoData = (GLOBAL_DATA['Tonkho'] || []).filter(function (t) {
+        return t['Delete'] !== 'X' && (parseFloat(t['Tồn kho']) || 0) > 0;
+    });
+    var khoHasStock = {};
+    var vattuHasStock = {};
+    tonkhoData.forEach(function (t) {
+        var kid = t['ID kho'] || t['ID_kho'] || t['Kho'] || '';
+        var vid = t['ID vật tư'] || t['MaVatTu'] || t['Mã vật tư'] || '';
+        if (kid) khoHasStock[String(kid)] = true;
+        if (vid) vattuHasStock[String(vid)] = true;
+    });
+
+    // Kho: chỉ kho có tồn
+    var khoData = (GLOBAL_DATA['DS_kho'] || []).filter(function (k) { return k['Delete'] !== 'X'; });
+    var khoOptions = '<option value="">-- Chọn kho --</option>';
+    khoData.forEach(function (k) {
+        var khoId = k['ID kho'] || k['ID_kho'] || k['ID'] || '';
+        var khoName = k['Tên kho'] || k['Ten_Kho'] || khoId;
+        if (!khoId || !khoHasStock[String(khoId)]) return;
+        khoOptions += '<option value="' + String(khoId).replace(/"/g, '&quot;') + '">' + String(khoName).replace(/</g, '&lt;') + '</option>';
+    });
+
+    // Vật tư: chỉ vật tư còn tồn (ở bất kỳ kho nào)
+    var vattuData = (GLOBAL_DATA['Vat_tu'] || []).filter(function (v) { return v['Delete'] !== 'X'; });
+    var vattuOptions = '<option value="">-- Chọn vật tư --</option>';
+    vattuData.forEach(function (v) {
+        var vId = v['ID vật tư'] || v['ID'] || v['MaVatTu'] || v['Mã vật tư'] || '';
+        if (!vId || !vattuHasStock[String(vId)]) return;
+        var vName = v['Tên vật tư'] || v['Ten_vat_tu'] || vId;
+        var vDvt = v['Đơn vị tính'] || v['DonViTinh'] || v['DVT'] || v['Don_vi_tinh'] || '';
+        var vDongia = v['Đơn giá'] || v['DonGia'] || v['Don_Gia'] || v['Dongia'] || '';
+        vattuOptions += '<option value="' + String(vId).replace(/"/g, '&quot;') + '"'
+            + ' data-ten="' + String(vName).replace(/"/g, '&quot;') + '"'
+            + ' data-dvt="' + String(vDvt).replace(/"/g, '&quot;') + '"'
+            + ' data-dongia="' + String(vDongia).replace(/"/g, '&quot;') + '"'
+            + '>' + String(vName || vId).replace(/</g, '&lt;') + (vName && vId ? ' (' + vId + ')' : '') + '</option>';
+    });
+
+    // User
+    var userOptions = '<option value="">-- Chọn --</option>';
+    (GLOBAL_DATA['User'] || []).forEach(function (u) {
+        if (u['Delete'] !== 'X') {
+            var uId = u['ID'] || '';
+            var uName = u['Họ và tên'] || uId;
+            userOptions += '<option value="' + String(uId).replace(/"/g, '&quot;') + '">' + String(uName).replace(/</g, '&lt;') + '</option>';
+        }
+    });
+
+    // Đơn vị tính
+    var dvtData = (GLOBAL_DATA['Drop'] || []).filter(function (r) {
+        var cond = String(r['condition'] || r['Condition'] || '').toLowerCase().trim();
+        return (cond === 'đơn vị tính' || cond === 'don vi tinh' || cond === 'dvt') && r['Delete'] !== 'X';
+    });
+    var dvtOptions = '<option value="">-- ĐVT --</option>';
+    dvtData.forEach(function (item) {
+        var val = item['label'] || item['Label'] || item['id'] || item['ID'] || '';
+        dvtOptions += '<option value="' + String(val).replace(/"/g, '&quot;') + '">' + String(val).replace(/</g, '&lt;') + '</option>';
+    });
+    if (dvtData.length === 0) {
+        ['Cái', 'Bộ', 'Kg', 'Lít', 'M', 'Thùng', 'Bao', 'Cuộn'].forEach(function (v) {
+            dvtOptions += '<option value="' + v + '">' + v + '</option>';
+        });
+    }
+
+    return { khoOptions: khoOptions, vattuOptions: vattuOptions, userOptions: userOptions, dvtOptions: dvtOptions };
+}
+
+/** Helper: Lấy tồn kho hiện tại của vật tư tại kho */
+function getStockLevel(vattuId, khoId) {
+    if (!vattuId || !khoId) return null;
+    var tonkho = (GLOBAL_DATA['Tonkho'] || []).find(function (t) {
+        return t['ID vật tư'] === vattuId && t['ID kho'] === khoId && t['Delete'] !== 'X';
+    });
+    return tonkho ? (parseFloat(tonkho['Tồn kho']) || 0) : 0;
+}
+
+/** Helper: Attach auto-fill vật tư khi chọn (ĐVT, đơn giá, tồn kho) */
+function attachVattuAutoFill(vattuSelectId, dvtSelectId, dongiaInputId, khoSelectId, stockDisplayId) {
+    var vattuEl = document.getElementById(vattuSelectId);
+    var dvtEl = document.getElementById(dvtSelectId);
+    var dongiaEl = document.getElementById(dongiaInputId);
+    var khoEl = khoSelectId ? document.getElementById(khoSelectId) : null;
+    var stockEl = stockDisplayId ? document.getElementById(stockDisplayId) : null;
+
+    function updateStock() {
+        if (!stockEl || !khoEl) return;
+        var vattuId = vattuEl ? vattuEl.value : '';
+        var khoId = khoEl ? khoEl.value : '';
+        if (vattuId && khoId) {
+            var stock = getStockLevel(vattuId, khoId);
+            stockEl.innerHTML = '<i class="fas fa-boxes me-1"></i>Tồn kho hiện tại: <b class="' + (stock <= 0 ? 'text-danger' : 'text-success') + '">' + stock.toLocaleString() + '</b>';
+            stockEl.classList.remove('d-none');
+        } else {
+            stockEl.classList.add('d-none');
+        }
+    }
+
+    if (vattuEl) {
+        vattuEl.addEventListener('change', function () {
+            var opt = vattuEl.options[vattuEl.selectedIndex];
+            if (!opt || !opt.value) return;
+            var dvt = opt.getAttribute('data-dvt');
+            var dg = opt.getAttribute('data-dongia');
+            if (dvt && dvtEl) {
+                var found = false;
+                for (var i = 0; i < dvtEl.options.length; i++) {
+                    if (dvtEl.options[i].value === dvt || dvtEl.options[i].text === dvt) {
+                        dvtEl.selectedIndex = i; found = true; break;
+                    }
+                }
+                if (!found) { var newOpt = new Option(dvt, dvt, true, true); dvtEl.add(newOpt); }
+            }
+            if (dg && parseFloat(dg) > 0 && dongiaEl) { dongiaEl.value = dg; }
+            // Trigger tính thành tiền
+            if (dongiaEl) dongiaEl.dispatchEvent(new Event('input'));
+            updateStock();
+        });
+    }
+    if (khoEl) khoEl.addEventListener('change', updateStock);
+}
+
+window.openQuickExportForm = function () {
+    if (!CURRENT_USER) {
+        Swal.fire({ icon: 'warning', title: 'Vui lòng đăng nhập trước!' });
+        return;
+    }
+
+    var dd = buildWarehouseDropdowns();
+    var today = new Date().toISOString().split('T')[0];
+    var userName = CURRENT_USER ? (CURRENT_USER.name || CURRENT_USER['Họ và tên'] || '') : '';
+    var userId = CURRENT_USER ? (CURRENT_USER['ID'] || CURRENT_USER['id'] || '') : '';
+
+    // Lý do xuất từ Drop table
+    var lyDoData = (GLOBAL_DATA['Drop'] || []).filter(function (r) {
+        var cond = String(r['condition'] || r['Condition'] || '').toLowerCase().trim();
+        return (cond === 'loại nhập xuất' || cond === 'loai nhap xuat' || cond === 'loainx' || cond === 'lý do xuất' || cond === 'ly do xuat') && r['Delete'] !== 'X';
+    });
+    var lyDoOptions = '<option value="">-- Chọn lý do --</option>';
+    lyDoData.forEach(function (item) {
+        var val = item['label'] || item['Label'] || item['id'] || item['ID'] || '';
+        lyDoOptions += '<option value="' + String(val).replace(/"/g, '&quot;') + '">' + String(val).replace(/</g, '&lt;') + '</option>';
+    });
+    if (lyDoData.length === 0) {
+        ['Xuất sử dụng', 'Xuất bán', 'Xuất trả NCC', 'Xuất hủy', 'Khác'].forEach(function (v) {
+            lyDoOptions += '<option value="' + v + '">' + v + '</option>';
+        });
+    }
+
+    var html = '<div style="text-align: left;">'
+        + '<div class="alert alert-danger bg-danger bg-opacity-10 border-danger py-2 mb-3" style="font-size:12px;">'
+        + '<i class="fas fa-arrow-circle-up me-1"></i> Xuất vật tư ra khỏi kho. Hệ thống tự động tạo phiếu & cập nhật tồn kho.'
+        + '</div>'
+        + '<div class="row g-2">'
+        // Hàng 1: Ngày + Người xuất
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Ngày xuất <span class="text-danger">*</span></label>'
+        + '  <input type="date" id="qx-date" class="form-control form-control-sm" value="' + today + '">'
+        + '</div>'
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Người xuất</label>'
+        + '  <input type="text" class="form-control form-control-sm bg-light" value="' + userName + ' (' + userId + ')" disabled>'
+        + '</div>'
+        // Hàng 2: Kho xuất + Lý do
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Kho xuất <span class="text-danger">*</span></label>'
+        + '  <select id="qx-kho" class="form-select form-select-sm">' + dd.khoOptions + '</select>'
+        + '</div>'
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Lý do xuất <span class="text-danger">*</span></label>'
+        + '  <select id="qx-lydo" class="form-select form-select-sm">' + lyDoOptions + '</select>'
+        + '</div>'
+        // Hàng 3: Người nhận + Nội dung
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Người nhận</label>'
+        + '  <select id="qx-nguoinhan" class="form-select form-select-sm">' + dd.userOptions + '</select>'
+        + '</div>'
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Nội dung / Mục đích</label>'
+        + '  <input type="text" id="qx-noidung" class="form-control form-control-sm" placeholder="Sử dụng cho...">'
+        + '</div>'
+        // Hàng 4: Vật tư
+        + '<div class="col-12">'
+        + '  <label class="form-label fw-bold small mb-1">Vật tư xuất <span class="text-danger">*</span></label>'
+        + '  <select id="qx-vattu" class="form-select form-select-sm">' + dd.vattuOptions + '</select>'
+        + '</div>'
+        // Tồn kho hiện tại
+        + '<div class="col-12">'
+        + '  <div id="qx-stock-display" class="small text-muted d-none" style="font-size:11px;"></div>'
+        + '</div>'
+        // Hàng 5: SL + ĐVT + Đơn giá
+        + '<div class="col-4">'
+        + '  <label class="form-label fw-bold small mb-1">Số lượng <span class="text-danger">*</span></label>'
+        + '  <input type="number" id="qx-soluong" class="form-control form-control-sm" placeholder="0" min="0.01" step="any" required>'
+        + '</div>'
+        + '<div class="col-4">'
+        + '  <label class="form-label fw-bold small mb-1">ĐVT</label>'
+        + '  <select id="qx-dvt" class="form-select form-select-sm">' + dd.dvtOptions + '</select>'
+        + '</div>'
+        + '<div class="col-4">'
+        + '  <label class="form-label fw-bold small mb-1">Đơn giá</label>'
+        + '  <input type="number" id="qx-dongia" class="form-control form-control-sm" placeholder="0" min="0" step="any">'
+        + '</div>'
+        // Hàng 6: Thành tiền
+        + '<div class="col-12">'
+        + '  <label class="form-label fw-bold small mb-1">Thành tiền (VNĐ)</label>'
+        + '  <input type="number" id="qx-thanhtien" class="form-control form-control-sm fw-bold text-danger" placeholder="Tự tính = SL × Đơn giá" min="0" readonly>'
+        + '</div>'
+        // Hàng 7: Ghi chú
+        + '<div class="col-12">'
+        + '  <label class="form-label fw-bold small mb-1">Ghi chú</label>'
+        + '  <textarea id="qx-ghichu" class="form-control form-control-sm" rows="2" placeholder="Ghi chú thêm..."></textarea>'
+        + '</div>'
+        + '</div></div>';
+
+    Swal.fire({
+        title: '<i class="fas fa-arrow-circle-up me-2 text-danger"></i>Xuất kho nhanh',
+        html: html,
+        width: '650px',
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-save me-1"></i> Lưu phiếu xuất',
+        cancelButtonText: 'Hủy',
+        confirmButtonColor: '#dc3545',
+        customClass: { popup: 'rounded-4 shadow-lg' },
+        didOpen: function () {
+            // Auto-fill khi chọn vật tư
+            attachVattuAutoFill('qx-vattu', 'qx-dvt', 'qx-dongia', 'qx-kho', 'qx-stock-display');
+
+            // Auto-tính thành tiền
+            var slEl = document.getElementById('qx-soluong');
+            var dgEl = document.getElementById('qx-dongia');
+            var ttEl = document.getElementById('qx-thanhtien');
+            function calcTT() {
+                var sl = parseFloat(slEl.value) || 0;
+                var dg = parseFloat(dgEl.value) || 0;
+                ttEl.value = sl > 0 && dg > 0 ? Math.round(sl * dg) : '';
+            }
+            slEl.addEventListener('input', calcTT);
+            dgEl.addEventListener('input', calcTT);
+        },
+        preConfirm: function () {
+            var date = document.getElementById('qx-date').value;
+            var kho = document.getElementById('qx-kho').value;
+            var lydo = document.getElementById('qx-lydo').value;
+            var nguoinhan = document.getElementById('qx-nguoinhan').value;
+            var noidung = document.getElementById('qx-noidung').value;
+            var vattuEl = document.getElementById('qx-vattu');
+            var vattu = vattuEl.value;
+            var vattuTen = vattu ? (vattuEl.options[vattuEl.selectedIndex].getAttribute('data-ten') || vattuEl.options[vattuEl.selectedIndex].text) : '';
+            var soluong = parseFloat(document.getElementById('qx-soluong').value) || 0;
+            var dvt = document.getElementById('qx-dvt').value;
+            var dongia = parseFloat(document.getElementById('qx-dongia').value) || 0;
+            var thanhtien = parseFloat(document.getElementById('qx-thanhtien').value) || (soluong * dongia);
+            var ghichu = document.getElementById('qx-ghichu').value;
+
+            if (!date) { Swal.showValidationMessage('Vui lòng chọn ngày xuất'); return false; }
+            if (!kho) { Swal.showValidationMessage('Vui lòng chọn kho xuất'); return false; }
+            if (!lydo) { Swal.showValidationMessage('Vui lòng chọn lý do xuất'); return false; }
+            if (!vattu) { Swal.showValidationMessage('Vui lòng chọn vật tư'); return false; }
+            if (soluong <= 0) { Swal.showValidationMessage('Số lượng phải > 0'); return false; }
+
+            // Kiểm tra tồn kho
+            var stock = getStockLevel(vattu, kho);
+            if (stock !== null && soluong > stock) {
+                Swal.showValidationMessage('Không đủ tồn kho! Hiện có: ' + stock.toLocaleString() + ', yêu cầu: ' + soluong.toLocaleString());
+                return false;
+            }
+
+            return { date: date, kho: kho, lydo: lydo, nguoinhan: nguoinhan, noidung: noidung, vattu: vattu, vattuTen: vattuTen, soluong: soluong, dvt: dvt, dongia: dongia, thanhtien: thanhtien, ghichu: ghichu };
+        }
+    }).then(function (result) {
+        if (result.isConfirmed && result.value) {
+            submitQuickExport(result.value);
+        }
+    });
+}
+
+async function submitQuickExport(params) {
+    showLoading(true);
+    try {
+        var userId = CURRENT_USER['ID'] || CURRENT_USER['id'] || '';
+        if (!userId) throw new Error('Không xác định được mã nhân viên');
+
+        var phieuXuatId = generatePhieuXuatId(userId, new Date(params.date));
+
+        // Bước 1: Tạo chi tiết xuất (bảng con) trước
+        var chiTietData = {
+            'ID phieu Xuat': phieuXuatId,
+            'ID vật tư': params.vattu,
+            'SoLuong': params.soluong,
+            'DonGia': params.dongia,
+            'ThanhTien': params.thanhtien,
+            'DonViTinh': params.dvt,
+            'GhiChu': params.ghichu || params.lydo
+        };
+
+        var chiTietResult = await callSupabase('insert', 'XuatChiTiet', chiTietData);
+        if (chiTietResult.status !== 'success') {
+            // Fallback: tạo phiếu cha tạm trước
+            var stubResult = await callSupabase('insert', 'Phieuxuat', {
+                'ID phieu Xuat': phieuXuatId,
+                'NgayXuat': params.date,
+                'Tên kho': params.kho,
+                'Người xuất': userId,
+                'Diễn giải': 'Đang tổng hợp...',
+                'Trangthai': 'Hoàn thành',
+                'TongTien': params.thanhtien
+            });
+            if (stubResult.status === 'success') {
+                chiTietResult = await callSupabase('insert', 'XuatChiTiet', chiTietData);
+            }
+        }
+
+        if (chiTietResult.status !== 'success') {
+            throw new Error(chiTietResult.message || 'Không thể lưu chi tiết xuất kho');
+        }
+
+        // Bước 2: Tạo/cập nhật phiếu xuất (bảng cha) từ tổng hợp
+        await refreshSingleSheet('XuatChiTiet');
+        var children = (GLOBAL_DATA['XuatChiTiet'] || []).filter(function (c) {
+            return c['ID phieu Xuat'] === phieuXuatId && c['Delete'] !== 'X';
+        });
+        var tongTien = children.reduce(function (s, c) { return s + (parseFloat(c['ThanhTien']) || 0); }, 0);
+
+        var existingPhieu = (GLOBAL_DATA['Phieuxuat'] || []).find(function (r) {
+            return r['ID phieu Xuat'] === phieuXuatId && r['Delete'] !== 'X';
+        });
+
+        if (!existingPhieu) {
+            await callSupabase('insert', 'Phieuxuat', {
+                'ID phieu Xuat': phieuXuatId,
+                'NgayXuat': params.date,
+                'Tên kho': params.kho,
+                'Người xuất': userId,
+                'Diễn giải': params.lydo + (params.noidung ? ' - ' + params.noidung : '') + ' (tổng hợp từ ' + children.length + ' vật tư)',
+                'Trangthai': 'Hoàn thành',
+                'TongTien': tongTien
+            });
+        } else {
+            await callSupabase('update', 'Phieuxuat', {
+                'TongTien': tongTien,
+                'Diễn giải': params.lydo + ' (tổng hợp từ ' + children.length + ' vật tư)'
+            }, phieuXuatId);
+        }
+
+        // Bước 3: Cập nhật tồn kho - GIẢM tồn kho xuất
+        var tonNguon = (GLOBAL_DATA['Tonkho'] || []).find(function (t) {
+            return t['ID vật tư'] === params.vattu && t['ID kho'] === params.kho && t['Delete'] !== 'X';
+        });
+        if (tonNguon) {
+            var newTon = (parseFloat(tonNguon['Tồn kho']) || 0) - params.soluong;
+            await callSupabase('update', 'Tonkho', { 'Tồn kho': newTon }, tonNguon['ID_TonKho']);
+        }
+
+        // Refresh
+        await refreshSingleSheet('Phieuxuat');
+        await refreshSingleSheet('XuatChiTiet');
+        await refreshSingleSheet('Tonkho');
+
+        showLoading(false);
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Đã xuất kho thành công!',
+            html: '<div style="font-size:13px; text-align:left;">'
+                + '<p>Phiếu xuất: <b>' + phieuXuatId + '</b></p>'
+                + '<p>Kho: <b>' + params.kho + '</b></p>'
+                + '<p>Vật tư: <b>' + (params.vattuTen || params.vattu) + '</b></p>'
+                + '<p>Số lượng: <b>' + params.soluong.toLocaleString() + '</b> ' + (params.dvt || '') + '</p>'
+                + '<p>Thành tiền: <b>' + (params.thanhtien || 0).toLocaleString() + ' đ</b></p>'
+                + '<p>Lý do: <b>' + params.lydo + '</b></p>'
+                + '</div>',
+            confirmButtonText: '<i class="fas fa-plus me-1"></i> Xuất tiếp',
+            showCancelButton: true,
+            cancelButtonText: 'Đóng',
+            confirmButtonColor: '#dc3545'
+        }).then(function (result) {
+            if (result.isConfirmed) openQuickExportForm();
+        });
+
+    } catch (err) {
+        showLoading(false);
+        console.error('Quick Export Error:', err);
+        Swal.fire({ icon: 'error', title: 'Lỗi xuất kho', text: err.message || 'Không thể lưu. Vui lòng thử lại.' });
+    }
+}
+
+// =============================================
 // CHUYỂN KHO NHANH (Quick Warehouse Transfer)
 // Luồng: Nhập chi tiết chuyển → tạo phiếu chuyển + cập nhật tồn kho
 // ID phiếu: {ID nhân viên}-CK-{yymmdd} (VD: CDX001-CK-250210)
@@ -4950,110 +5369,133 @@ window.openQuickTransferForm = function () {
         return;
     }
 
-    var khoData = (GLOBAL_DATA['DS_kho'] || []).filter(function (k) { return k['Delete'] !== 'X'; });
-    var khoOptions = '<option value="">-- Chọn kho --</option>';
-    khoData.forEach(function (k) {
-        var khoId = k['ID kho'] || k['ID'] || '';
-        var khoName = k['Tên kho'] || k['Ten_Kho'] || khoId;
-        khoOptions += '<option value="' + String(khoId).replace(/"/g, '&quot;') + '">' + String(khoName).replace(/</g, '&lt;') + '</option>';
-    });
+    var dd = buildWarehouseDropdowns();
+    var today = new Date().toISOString().split('T')[0];
+    var userName = CURRENT_USER ? (CURRENT_USER.name || CURRENT_USER['Họ và tên'] || '') : '';
+    var userId = CURRENT_USER ? (CURRENT_USER['ID'] || CURRENT_USER['id'] || '') : '';
 
-    var vattuData = (GLOBAL_DATA['Vat_tu'] || []).filter(function (v) { return v['Delete'] !== 'X'; });
-    var vattuOptions = '<option value="">-- Chọn vật tư --</option>';
-    vattuData.forEach(function (v) {
-        var vId = v['ID vật tư'] || v['ID'] || '';
-        var vName = v['Tên vật tư'] || v['Ten_vat_tu'] || vId;
-        vattuOptions += '<option value="' + String(vId).replace(/"/g, '&quot;') + '">' + String(vName).replace(/</g, '&lt;') + '</option>';
-    });
-
-    var userOptions = '<option value="">-- Chọn người nhận --</option>';
-    (GLOBAL_DATA['User'] || []).forEach(function (u) {
-        if (u['Delete'] !== 'X') {
-            var uId = u['ID'] || '';
-            var uName = u['Họ và tên'] || uId;
-            userOptions += '<option value="' + String(uId).replace(/"/g, '&quot;') + '">' + String(uName).replace(/</g, '&lt;') + '</option>';
-        }
-    });
-
-    var formHtml = `
-        <form id="quickTransferForm" class="text-start">
-            <div class="row g-3">
-                <div class="col-12">
-                    <label class="form-label fw-bold">Ngày chuyển</label>
-                    <input type="date" class="form-control" name="date" value="${new Date().toISOString().split('T')[0]}" required>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">Kho đi (Nguồn)</label>
-                    <select class="form-select" name="khoNguon" required>${khoOptions}</select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">Kho đến (Đích)</label>
-                    <select class="form-select" name="khoDich" required>${khoOptions}</select>
-                </div>
-                <div class="col-12">
-                    <label class="form-label fw-bold">Vật tư chuyển</label>
-                    <select class="form-select" name="vattu" required>${vattuOptions}</select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">Số lượng</label>
-                    <input type="number" class="form-control" name="soluong" step="0.01" min="0.01" required>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">Đơn giá (để tính giá trị)</label>
-                    <input type="number" class="form-control" name="dongia" step="0.01" min="0" value="0">
-                </div>
-                <div class="col-12">
-                    <label class="form-label fw-bold">Người nhận</label>
-                    <select class="form-select" name="nguoiNhan">${userOptions}</select>
-                </div>
-                <div class="col-12">
-                    <label class="form-label fw-bold">Lý do chuyển kho</label>
-                    <textarea class="form-control" name="lydo" rows="2" placeholder="Ví dụ: Bổ sung hàng cho chi nhánh, điều chuyển vật tư dự án..."></textarea>
-                </div>
-                <div class="col-12">
-                    <label class="form-label fw-bold">Ghi chú</label>
-                    <textarea class="form-control" name="ghichu" rows="2"></textarea>
-                </div>
-            </div>
-        </form>
-    `;
+    var html = '<div style="text-align: left;">'
+        + '<div class="alert alert-info bg-info bg-opacity-10 border-info py-2 mb-3" style="font-size:12px;">'
+        + '<i class="fas fa-exchange-alt me-1"></i> Điều chuyển vật tư giữa các kho. Tồn kho được tự động cập nhật.'
+        + '</div>'
+        + '<div class="row g-2">'
+        // Hàng 1: Ngày + Người chuyển
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Ngày chuyển <span class="text-danger">*</span></label>'
+        + '  <input type="date" id="qck-date" class="form-control form-control-sm" value="' + today + '">'
+        + '</div>'
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Người chuyển</label>'
+        + '  <input type="text" class="form-control form-control-sm bg-light" value="' + userName + ' (' + userId + ')" disabled>'
+        + '</div>'
+        // Hàng 2: Kho nguồn + Kho đích
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1"><i class="fas fa-sign-out-alt text-danger me-1"></i>Kho đi (Nguồn) <span class="text-danger">*</span></label>'
+        + '  <select id="qck-khonguon" class="form-select form-select-sm border-danger">' + dd.khoOptions + '</select>'
+        + '</div>'
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1"><i class="fas fa-sign-in-alt text-success me-1"></i>Kho đến (Đích) <span class="text-danger">*</span></label>'
+        + '  <select id="qck-khodich" class="form-select form-select-sm border-success">' + dd.khoOptions + '</select>'
+        + '</div>'
+        // Hàng 3: Người nhận
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Người nhận</label>'
+        + '  <select id="qck-nguoinhan" class="form-select form-select-sm">' + dd.userOptions + '</select>'
+        + '</div>'
+        + '<div class="col-6">'
+        + '  <label class="form-label fw-bold small mb-1">Lý do chuyển <span class="text-danger">*</span></label>'
+        + '  <input type="text" id="qck-lydo" class="form-control form-control-sm" placeholder="Bổ sung hàng, điều chuyển dự án...">'
+        + '</div>'
+        // Hàng 4: Vật tư
+        + '<div class="col-12">'
+        + '  <label class="form-label fw-bold small mb-1">Vật tư chuyển <span class="text-danger">*</span></label>'
+        + '  <select id="qck-vattu" class="form-select form-select-sm">' + dd.vattuOptions + '</select>'
+        + '</div>'
+        // Tồn kho
+        + '<div class="col-12">'
+        + '  <div id="qck-stock-display" class="small text-muted d-none" style="font-size:11px;"></div>'
+        + '</div>'
+        // Hàng 5: SL + ĐVT + Đơn giá
+        + '<div class="col-4">'
+        + '  <label class="form-label fw-bold small mb-1">Số lượng <span class="text-danger">*</span></label>'
+        + '  <input type="number" id="qck-soluong" class="form-control form-control-sm" placeholder="0" min="0.01" step="any" required>'
+        + '</div>'
+        + '<div class="col-4">'
+        + '  <label class="form-label fw-bold small mb-1">ĐVT</label>'
+        + '  <select id="qck-dvt" class="form-select form-select-sm">' + dd.dvtOptions + '</select>'
+        + '</div>'
+        + '<div class="col-4">'
+        + '  <label class="form-label fw-bold small mb-1">Đơn giá</label>'
+        + '  <input type="number" id="qck-dongia" class="form-control form-control-sm" placeholder="0" min="0" step="any">'
+        + '</div>'
+        // Hàng 6: Thành tiền
+        + '<div class="col-12">'
+        + '  <label class="form-label fw-bold small mb-1">Giá trị chuyển (VNĐ)</label>'
+        + '  <input type="number" id="qck-thanhtien" class="form-control form-control-sm fw-bold text-info" placeholder="Tự tính = SL × Đơn giá" readonly>'
+        + '</div>'
+        // Hàng 7: Ghi chú
+        + '<div class="col-12">'
+        + '  <label class="form-label fw-bold small mb-1">Ghi chú</label>'
+        + '  <textarea id="qck-ghichu" class="form-control form-control-sm" rows="2" placeholder="Ghi chú thêm..."></textarea>'
+        + '</div>'
+        + '</div></div>';
 
     Swal.fire({
-        title: '<i class="fas fa-exchange-alt text-primary me-2"></i>Chuyển kho nhanh',
-        html: formHtml,
-        width: '700px',
-        confirmButtonText: '<i class="fas fa-check me-1"></i>Lưu chuyển kho',
+        title: '<i class="fas fa-exchange-alt me-2 text-info"></i>Chuyển kho nhanh',
+        html: html,
+        width: '650px',
         showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-save me-1"></i> Lưu chuyển kho',
         cancelButtonText: 'Hủy',
-        confirmButtonColor: '#2E7D32',
+        confirmButtonColor: '#0dcaf0',
+        customClass: { popup: 'rounded-4 shadow-lg' },
+        didOpen: function () {
+            // Auto-fill khi chọn vật tư
+            attachVattuAutoFill('qck-vattu', 'qck-dvt', 'qck-dongia', 'qck-khonguon', 'qck-stock-display');
+
+            // Auto-tính thành tiền
+            var slEl = document.getElementById('qck-soluong');
+            var dgEl = document.getElementById('qck-dongia');
+            var ttEl = document.getElementById('qck-thanhtien');
+            function calcTT2() {
+                var sl = parseFloat(slEl.value) || 0;
+                var dg = parseFloat(dgEl.value) || 0;
+                ttEl.value = sl > 0 && dg > 0 ? Math.round(sl * dg) : '';
+            }
+            slEl.addEventListener('input', calcTT2);
+            dgEl.addEventListener('input', calcTT2);
+        },
         preConfirm: function () {
-            var form = document.getElementById('quickTransferForm');
-            if (!form.checkValidity()) {
-                form.reportValidity();
+            var date = document.getElementById('qck-date').value;
+            var khoNguon = document.getElementById('qck-khonguon').value;
+            var khoDich = document.getElementById('qck-khodich').value;
+            var nguoinhan = document.getElementById('qck-nguoinhan').value;
+            var lydo = document.getElementById('qck-lydo').value;
+            var vattuEl = document.getElementById('qck-vattu');
+            var vattu = vattuEl.value;
+            var vattuTen = vattu ? (vattuEl.options[vattuEl.selectedIndex].getAttribute('data-ten') || vattuEl.options[vattuEl.selectedIndex].text) : '';
+            var soluong = parseFloat(document.getElementById('qck-soluong').value) || 0;
+            var dvt = document.getElementById('qck-dvt').value;
+            var dongia = parseFloat(document.getElementById('qck-dongia').value) || 0;
+            var thanhtien = parseFloat(document.getElementById('qck-thanhtien').value) || (soluong * dongia);
+            var ghichu = document.getElementById('qck-ghichu').value;
+
+            if (!date) { Swal.showValidationMessage('Vui lòng chọn ngày'); return false; }
+            if (!khoNguon) { Swal.showValidationMessage('Vui lòng chọn kho nguồn'); return false; }
+            if (!khoDich) { Swal.showValidationMessage('Vui lòng chọn kho đích'); return false; }
+            if (khoNguon === khoDich) { Swal.showValidationMessage('Kho nguồn và kho đích phải khác nhau!'); return false; }
+            if (!vattu) { Swal.showValidationMessage('Vui lòng chọn vật tư'); return false; }
+            if (soluong <= 0) { Swal.showValidationMessage('Số lượng phải > 0'); return false; }
+            if (!lydo) { Swal.showValidationMessage('Vui lòng nhập lý do chuyển'); return false; }
+
+            // Kiểm tra tồn kho nguồn
+            var stock = getStockLevel(vattu, khoNguon);
+            if (stock !== null && soluong > stock) {
+                Swal.showValidationMessage('Kho nguồn không đủ! Tồn: ' + stock.toLocaleString() + ', cần: ' + soluong.toLocaleString());
                 return false;
             }
-            var fd = new FormData(form);
-            var params = {
-                date: fd.get('date'),
-                khoNguon: fd.get('khoNguon'),
-                khoDich: fd.get('khoDich'),
-                vattu: fd.get('vattu'),
-                soluong: parseFloat(fd.get('soluong')) || 0,
-                dongia: parseFloat(fd.get('dongia')) || 0,
-                nguoiNhan: fd.get('nguoiNhan'),
-                lydo: fd.get('lydo'),
-                ghichu: fd.get('ghichu')
-            };
-            if (!params.khoNguon || !params.khoDich || !params.vattu || params.soluong <= 0) {
-                Swal.showValidationMessage('Vui lòng điền đầy đủ thông tin bắt buộc');
-                return false;
-            }
-            if (params.khoNguon === params.khoDich) {
-                Swal.showValidationMessage('Kho nguồn và kho đích phải khác nhau');
-                return false;
-            }
-            params.thanhtien = params.soluong * params.dongia;
-            return params;
+
+            return { date: date, khoNguon: khoNguon, khoDich: khoDich, nguoiNhan: nguoinhan, lydo: lydo, vattu: vattu, vattuTen: vattuTen, soluong: soluong, dvt: dvt, dongia: dongia, thanhtien: thanhtien, ghichu: ghichu };
         }
     }).then(function (result) {
         if (result.isConfirmed && result.value) {
@@ -5155,17 +5597,19 @@ async function submitQuickTransfer(params) {
 
         Swal.fire({
             icon: 'success',
-            title: 'Đã lưu thành công!',
+            title: 'Chuyển kho thành công!',
             html: '<div style="font-size:13px; text-align:left;">'
                 + '<p>Phiếu: <b>' + chuyenKhoId + '</b></p>'
                 + '<p>Từ kho: <b>' + params.khoNguon + '</b> → Đến kho: <b>' + params.khoDich + '</b></p>'
-                + '<p>Vật tư: <b>' + params.vattu + '</b> × ' + params.soluong + '</p>'
+                + '<p>Vật tư: <b>' + (params.vattuTen || params.vattu) + '</b></p>'
+                + '<p>Số lượng: <b>' + params.soluong.toLocaleString() + '</b> ' + (params.dvt || '') + '</p>'
                 + '<p>Giá trị: <b>' + tongGT.toLocaleString() + ' đ</b></p>'
+                + '<p>Lý do: <b>' + (params.lydo || '') + '</b></p>'
                 + '</div>',
             confirmButtonText: '<i class="fas fa-plus me-1"></i> Chuyển tiếp',
             showCancelButton: true,
             cancelButtonText: 'Đóng',
-            confirmButtonColor: '#2E7D32'
+            confirmButtonColor: '#0dcaf0'
         }).then(function (result) {
             if (result.isConfirmed) {
                 openQuickTransferForm();
