@@ -108,7 +108,7 @@ function updateMobileOfflineIndicator() {
 
 function enableOfflineCache() {
     // Lưu trữ dữ liệu quan trọng vào localStorage để sử dụng offline
-    var criticalTables = ['User', 'BangLuongThang', 'Chamcong', 'LichSuLuong', 'GiaoDichLuong', 'Phieunhap', 'NhapChiTiet', 'DS_kho', 'Vat_tu'];
+    var criticalTables = ['User', 'BangLuongThang', 'Chamcong', 'LichSuLuong', 'GiaoDichLuong', 'Phieunhap', 'NhapChiTiet', 'DS_kho', 'Vat_tu', 'Tonkho'];
     
     criticalTables.forEach(table => {
         if (GLOBAL_DATA[table]) {
@@ -862,7 +862,7 @@ function getInitialData() {
         });
     });
 
-    const extraSheets = ['User', 'DS_kho', 'NhapChiTiet', 'XuatChiTiet', 'Chiphichitiet', 'Vat_tu', 'Nhomvattu', 'Drop'];
+    const extraSheets = ['User', 'DS_kho', 'NhapChiTiet', 'XuatChiTiet', 'Chiphichitiet', 'Vat_tu', 'Nhomvattu', 'Drop', 'Tonkho'];
     var allSheets = extraSheets.slice();
     Object.keys(RELATION_CONFIG).forEach(function (parent) {
         var child = RELATION_CONFIG[parent].child;
@@ -958,12 +958,41 @@ function renderDashboard() {
     var container = document.createElement('div');
     container.className = 'dashboard-container container-fluid pt-3';
 
-    // Dùng đúng key trong GLOBAL_DATA (trùng với sheet trong MENU_STRUCTURE / getInitialData)
+    // KPI thực tế (active) theo đúng nguyên tắc:
+    // - Nhân sự: từ User có Act active
+    // - Vật tư, Kho: từ bảng Tồn kho (Tonkho)
+    // - Phiếu NX: số phiếu nhập/xuất chưa bị xóa
+    var users = (GLOBAL_DATA['User'] || []).filter(function (u) {
+        if (u['Delete'] === 'X') return false;
+        var act = (u['Act'] ?? u['ACT'] ?? u['Active'] ?? u['active'] ?? '').toString().toLowerCase().trim();
+        if (!act) return true; // nếu không set Act thì coi như active
+        return !(act === 'n' || act === 'no' || act === 'false' || act === '0');
+    });
+
+    var tonkhoRows = (GLOBAL_DATA['Tonkho'] || []).filter(function (r) { return r['Delete'] !== 'X'; });
+    var stockKey = typeof getStockFieldKey === 'function' ? getStockFieldKey() : null;
+    if (stockKey) {
+        tonkhoRows = tonkhoRows.filter(function (r) { return (parseFloat(r[stockKey]) || 0) > 0; });
+    }
+
+    // Vật tư active = số ID vật tư DISTINCT đang còn tồn
+    var vattuSet = new Set();
+    // Kho active = số ID kho DISTINCT đang có tồn
+    var khoSet = new Set();
+    tonkhoRows.forEach(function (r) {
+        var vid = r['ID vật tư'] || r['MaVatTu'] || r['Mã vật tư'] || r['ID_vattu'] || '';
+        var kid = r['ID kho'] || r['ID_kho'] || r['Kho'] || '';
+        if (vid) vattuSet.add(String(vid));
+        if (kid) khoSet.add(String(kid));
+    });
+
     var stats = {
-        user: (GLOBAL_DATA['User'] || []).length,
-        vattu: (GLOBAL_DATA['Vat_tu'] || []).length,
-        kho: (GLOBAL_DATA['DS_kho'] || []).length,
-        phieu: (GLOBAL_DATA['Phieunhap'] || []).length + (GLOBAL_DATA['Phieuxuat'] || []).length
+        user: users.length,
+        vattu: vattuSet.size,
+        kho: khoSet.size,
+        phieu:
+            ((GLOBAL_DATA['Phieunhap'] || []).filter(function (r) { return r['Delete'] !== 'X'; }).length) +
+            ((GLOBAL_DATA['Phieuxuat'] || []).filter(function (r) { return r['Delete'] !== 'X'; }).length)
     };
 
     var kpiHTML = `
@@ -2060,6 +2089,186 @@ window.exportPayrollToExcel = function() {
         });
     }
 }
+
+// --- RENDER BÁO CÁO TỒN KHO ĐẶC BIỆT (CÓ SẮP XẾP + HÀNH ĐỘNG) ---
+window.INVENTORY_SORT_KEY = null;
+window.INVENTORY_SORT_DIR = 'asc';
+
+function renderInventoryTable(data) {
+    var table = document.getElementById('data-table');
+    var tb = document.querySelector('#data-table tbody');
+    var th = document.querySelector('#data-table thead');
+    if (!tb || !th) return;
+
+    th.innerHTML = '';
+    tb.innerHTML = '';
+
+    var rows = (data || []).filter(function (r) { return r['Delete'] !== 'X'; });
+    if (!rows.length) {
+        th.innerHTML = '<tr><th class="bg-success text-white">Thông tin</th></tr>';
+        tb.innerHTML = '<tr><td class="text-center p-4 text-muted fst-italic">Chưa có dữ liệu tồn kho</td></tr>';
+        return;
+    }
+
+    // Xác định key tồn và các cột chính (ID vật tư, ID kho) để dùng cho thao tác
+    var stockKey = (typeof getStockFieldKey === 'function' && getStockFieldKey()) || 'SoLuongTon';
+    var sample = rows[0];
+    var colVatTu = sample['ID vật tư'] ? 'ID vật tư' : 'MaVatTu';
+    var colKho = sample['ID kho'] ? 'ID kho' : 'Kho';
+
+    // Lấy danh sách cột hiển thị đầy đủ từ Tonkho (trừ COLUMNS_HIDDEN)
+    var columnKeysMap = {};
+    rows.forEach(function (r) {
+        Object.keys(r).forEach(function (k) {
+            if (!COLUMNS_HIDDEN.includes(k)) columnKeysMap[k] = true;
+        });
+    });
+    var columnKeys = Object.keys(columnKeysMap);
+
+    // Ưu tiên đưa các cột chính lên đầu
+    var ordered = [];
+    ['ID_TonKho', colVatTu, 'TenVatTu', 'Tên vật tư', colKho, stockKey].forEach(function (k) {
+        if (columnKeys.includes(k) && !ordered.includes(k)) ordered.push(k);
+    });
+    columnKeys.forEach(function (k) {
+        if (!ordered.includes(k)) ordered.push(k);
+    });
+
+    // Sắp xếp theo cột được chọn
+    var sortKey = window.INVENTORY_SORT_KEY && ordered.includes(window.INVENTORY_SORT_KEY)
+        ? window.INVENTORY_SORT_KEY
+        : (ordered.includes(colVatTu) ? colVatTu : ordered[0]);
+    var dir = window.INVENTORY_SORT_DIR === 'desc' ? -1 : 1;
+    rows.sort(function (a, b) {
+        var va = a[sortKey];
+        var vb = b[sortKey];
+        var na = parseFloat(va);
+        var nb = parseFloat(vb);
+        var bothNumeric = !isNaN(na) && !isNaN(nb);
+        if (bothNumeric) {
+            if (na === nb) return 0;
+            return na > nb ? dir : -dir;
+        }
+        va = (va == null ? '' : String(va)).toLowerCase();
+        vb = (vb == null ? '' : String(vb)).toLowerCase();
+        if (va === vb) return 0;
+        return va > vb ? dir : -dir;
+    });
+
+    // Header với nút sort cho từng cột trong Tonkho
+    var headerRow = document.createElement('tr');
+    // Cột STT
+    var sttTh = document.createElement('th');
+    sttTh.className = 'bg-success text-white small text-center';
+    sttTh.textContent = 'STT';
+    headerRow.appendChild(sttTh);
+
+    columnKeys.forEach(function (key) {
+        var cell = document.createElement('th');
+        cell.className = 'bg-success text-white small';
+        cell.style.cursor = 'pointer';
+        cell.style.whiteSpace = 'nowrap';
+
+        var label = COLUMN_MAP[key] || key;
+        var icon = '';
+        if (window.INVENTORY_SORT_KEY === key) {
+            icon = window.INVENTORY_SORT_DIR === 'asc' ? ' ▲' : ' ▼';
+        } else {
+            icon = ' ⇅';
+        }
+        cell.innerHTML = '<span>' + label + '</span><span class="ms-1" style="font-size:10px;">' + icon + '</span>';
+        cell.onclick = function () {
+            if (window.INVENTORY_SORT_KEY === key) {
+                window.INVENTORY_SORT_DIR = window.INVENTORY_SORT_DIR === 'asc' ? 'desc' : 'asc';
+            } else {
+                window.INVENTORY_SORT_KEY = key;
+                window.INVENTORY_SORT_DIR = 'asc';
+            }
+            renderInventoryTable(data);
+        };
+
+        // Căn phải cho cột số / tiền, trái cho text
+        if (isMoneyField(key) || isNumericField(key) || key === stockKey) {
+            cell.classList.add('text-end');
+        } else {
+            cell.classList.add('text-start');
+        }
+
+        headerRow.appendChild(cell);
+    });
+    // Cột thao tác
+    var actTh = document.createElement('th');
+    actTh.className = 'bg-success text-white small text-center';
+    actTh.textContent = 'Thao tác';
+    headerRow.appendChild(actTh);
+
+    th.appendChild(headerRow);
+
+    // Render body
+    rows.forEach(function (r, idx) {
+        var tr = document.createElement('tr');
+        tr.className = 'align-middle';
+
+        var ton = stockKey ? (parseFloat(r[stockKey]) || 0) : 0;
+        var vattuId = r[colVatTu];
+        var khoId = r[colKho];
+
+        // STT
+        var tdIndex = document.createElement('td');
+        tdIndex.className = 'text-center small text-muted';
+        tdIndex.textContent = idx + 1;
+        tr.appendChild(tdIndex);
+
+        // Các cột dữ liệu Tonkho
+        columnKeys.forEach(function (key) {
+            var td = document.createElement('td');
+            var val = r[key];
+
+            if (isMoneyField(key)) {
+                td.className = 'text-end small';
+                td.textContent = formatMoney(val);
+            } else if (isNumericField(key) || key === stockKey) {
+                td.className = 'text-end small';
+                var num = parseFloat(val);
+                td.textContent = isNaN(num) ? '' : num.toLocaleString();
+                if (key === stockKey) {
+                    td.classList.add('fw-bold');
+                    td.classList.add(num <= 0 ? 'text-danger' : 'text-success');
+                }
+            } else {
+                td.className = 'text-start small';
+                td.textContent = val == null ? '' : String(val);
+            }
+
+            tr.appendChild(td);
+        });
+
+        // Thao tác: Xuất / Chuyển
+        var tdAct = document.createElement('td');
+        tdAct.className = 'text-center';
+        tdAct.innerHTML =
+            '<button class="btn btn-xs btn-outline-danger me-1" onclick="openExportFromInventory(\''
+            + String(vattuId).replace(/'/g, "\\'") + '\', \''
+            + String(khoId).replace(/'/g, "\\'") + '\')"><i class="fas fa-arrow-circle-up"></i></button>' +
+            '<button class="btn btn-xs btn-outline-info" onclick="openTransferFromInventory(\''
+            + String(vattuId).replace(/'/g, "\\'") + '\', \''
+            + String(khoId).replace(/'/g, "\\'") + '\')"><i class="fas fa-exchange-alt"></i></button>';
+        tr.appendChild(tdAct);
+
+        tb.appendChild(tr);
+    });
+}
+
+// Hành động từ báo cáo tồn kho → mở form Xuất / Chuyển với dữ liệu đã chọn
+window.openExportFromInventory = function (vattuId, khoId) {
+    window.PRESELECT_EXPORT = { vattuId: vattuId, khoId: khoId };
+    openQuickExportForm();
+};
+
+window.openTransferFromInventory = function (vattuId, khoId) {
+    window.PRESELECT_TRANSFER = { vattuId: vattuId, khoNguon: khoId };
+    openQuickTransferForm();
+};
 
 // --- POPUP CHI TIẾT LƯƠNG THEO ĐỊNH DẠNG MẪUI ---
 window.showPayrollDetail = function(record, month, year) {
@@ -3541,6 +3750,11 @@ function renderTable(data) {
             return;
         }
 
+        if (CURRENT_SHEET === 'Tonkho') {
+            renderInventoryTable(data);
+            return;
+        }
+
     // Xóa class attendance-table nếu không phải bảng chấm công
     var table = document.getElementById('data-table');
     if (table) table.classList.remove('attendance-table');
@@ -4965,14 +5179,29 @@ async function submitQuickExpense(params) {
 // ID phiếu: {ID nhân viên}-XK-{yymmdd} (VD: CDX001-XK-250824)
 // =============================================
 
+/** Xác định tên cột tồn kho thực tế trong bảng Tonkho (SoLuongTon / Số lượng tồn / So_luong_ton / Tồn kho...) */
+function getStockFieldKey() {
+    var rows = GLOBAL_DATA['Tonkho'] || [];
+    if (!rows.length) return null;
+    var sample = rows[0];
+    var candidates = ['Tồn kho', 'TonKho', 'Tonkho', 'SoLuongTon', 'Số lượng tồn', 'So_luong_ton'];
+    for (var i = 0; i < candidates.length; i++) {
+        if (sample.hasOwnProperty(candidates[i])) return candidates[i];
+    }
+    return null;
+}
+
 /** Helper: Build dropdown options cho Kho, Vật tư, User, ĐVT - dùng chung cho Xuất kho & Chuyển kho
  *  Nguyên lý:
  *  - Danh sách kho: chỉ những kho đang có vật tư tồn (Tonkho > 0)
  *  - Danh sách vật tư: chỉ những vật tư còn tồn
  */
 function buildWarehouseDropdowns() {
+    var stockKey = getStockFieldKey();
     var tonkhoData = (GLOBAL_DATA['Tonkho'] || []).filter(function (t) {
-        return t['Delete'] !== 'X' && (parseFloat(t['Tồn kho']) || 0) > 0;
+        if (t['Delete'] === 'X') return false;
+        if (!stockKey) return true;
+        return (parseFloat(t[stockKey]) || 0) > 0;
     });
     var khoHasStock = {};
     var vattuHasStock = {};
@@ -4983,7 +5212,7 @@ function buildWarehouseDropdowns() {
         if (vid) vattuHasStock[String(vid)] = true;
     });
 
-    // Kho: chỉ kho có tồn
+    // Kho: chỉ kho có tồn (nếu mapping ID khớp). Nếu không khớp ID thì sẽ không hiển thị (đúng nguyên tắc: kho không có tồn không được chọn).
     var khoData = (GLOBAL_DATA['DS_kho'] || []).filter(function (k) { return k['Delete'] !== 'X'; });
     var khoOptions = '<option value="">-- Chọn kho --</option>';
     khoData.forEach(function (k) {
@@ -4993,7 +5222,7 @@ function buildWarehouseDropdowns() {
         khoOptions += '<option value="' + String(khoId).replace(/"/g, '&quot;') + '">' + String(khoName).replace(/</g, '&lt;') + '</option>';
     });
 
-    // Vật tư: chỉ vật tư còn tồn (ở bất kỳ kho nào)
+    // Vật tư: chỉ vật tư còn tồn (ở bất kỳ kho nào). Nếu không khớp ID với bảng tồn kho → không hiển thị (tồn 0 không được chọn).
     var vattuData = (GLOBAL_DATA['Vat_tu'] || []).filter(function (v) { return v['Delete'] !== 'X'; });
     var vattuOptions = '<option value="">-- Chọn vật tư --</option>';
     vattuData.forEach(function (v) {
@@ -5041,10 +5270,11 @@ function buildWarehouseDropdowns() {
 /** Helper: Lấy tồn kho hiện tại của vật tư tại kho */
 function getStockLevel(vattuId, khoId) {
     if (!vattuId || !khoId) return null;
+    var stockKey = getStockFieldKey();
     var tonkho = (GLOBAL_DATA['Tonkho'] || []).find(function (t) {
         return t['ID vật tư'] === vattuId && t['ID kho'] === khoId && t['Delete'] !== 'X';
     });
-    return tonkho ? (parseFloat(tonkho['Tồn kho']) || 0) : 0;
+    return (tonkho && stockKey) ? (parseFloat(tonkho[stockKey]) || 0) : 0;
 }
 
 /** Helper: Attach auto-fill vật tư khi chọn (ĐVT, đơn giá, tồn kho) */
@@ -5209,6 +5439,22 @@ window.openQuickExportForm = function () {
             }
             slEl.addEventListener('input', calcTT);
             dgEl.addEventListener('input', calcTT);
+
+            // Preselect từ báo cáo tồn kho (nếu có)
+            if (window.PRESELECT_EXPORT) {
+                var pre = window.PRESELECT_EXPORT;
+                var khoSel = document.getElementById('qx-kho');
+                var vtSel = document.getElementById('qx-vattu');
+                if (khoSel && pre.khoId) {
+                    khoSel.value = pre.khoId;
+                    khoSel.dispatchEvent(new Event('change'));
+                }
+                if (vtSel && pre.vattuId) {
+                    vtSel.value = pre.vattuId;
+                    vtSel.dispatchEvent(new Event('change'));
+                }
+                delete window.PRESELECT_EXPORT;
+            }
         },
         preConfirm: function () {
             var date = document.getElementById('qx-date').value;
@@ -5231,9 +5477,13 @@ window.openQuickExportForm = function () {
             if (!vattu) { Swal.showValidationMessage('Vui lòng chọn vật tư'); return false; }
             if (soluong <= 0) { Swal.showValidationMessage('Số lượng phải > 0'); return false; }
 
-            // Kiểm tra tồn kho
+            // Kiểm tra tồn kho: phải có tồn > 0 và không được vượt quá tồn
             var stock = getStockLevel(vattu, kho);
-            if (stock !== null && soluong > stock) {
+            if (stock === null || stock <= 0) {
+                Swal.showValidationMessage('Kho này không còn tồn vật tư đã chọn.');
+                return false;
+            }
+            if (soluong > stock) {
                 Swal.showValidationMessage('Không đủ tồn kho! Hiện có: ' + stock.toLocaleString() + ', yêu cầu: ' + soluong.toLocaleString());
                 return false;
             }
@@ -5316,12 +5566,14 @@ async function submitQuickExport(params) {
         }
 
         // Bước 3: Cập nhật tồn kho - GIẢM tồn kho xuất
+        var stockKey = getStockFieldKey();
         var tonNguon = (GLOBAL_DATA['Tonkho'] || []).find(function (t) {
             return t['ID vật tư'] === params.vattu && t['ID kho'] === params.kho && t['Delete'] !== 'X';
         });
-        if (tonNguon) {
-            var newTon = (parseFloat(tonNguon['Tồn kho']) || 0) - params.soluong;
-            await callSupabase('update', 'Tonkho', { 'Tồn kho': newTon }, tonNguon['ID_TonKho']);
+        if (tonNguon && stockKey) {
+            var newTon = (parseFloat(tonNguon[stockKey]) || 0) - params.soluong;
+            var upd = {}; upd[stockKey] = newTon;
+            await callSupabase('update', 'Tonkho', upd, tonNguon['ID_TonKho']);
         }
 
         // Refresh
@@ -5464,6 +5716,22 @@ window.openQuickTransferForm = function () {
             }
             slEl.addEventListener('input', calcTT2);
             dgEl.addEventListener('input', calcTT2);
+
+            // Preselect từ báo cáo tồn kho (nếu có)
+            if (window.PRESELECT_TRANSFER) {
+                var pre2 = window.PRESELECT_TRANSFER;
+                var khoNguonSel = document.getElementById('qck-khonguon');
+                var vtSel2 = document.getElementById('qck-vattu');
+                if (khoNguonSel && pre2.khoNguon) {
+                    khoNguonSel.value = pre2.khoNguon;
+                    khoNguonSel.dispatchEvent(new Event('change'));
+                }
+                if (vtSel2 && pre2.vattuId) {
+                    vtSel2.value = pre2.vattuId;
+                    vtSel2.dispatchEvent(new Event('change'));
+                }
+                delete window.PRESELECT_TRANSFER;
+            }
         },
         preConfirm: function () {
             var date = document.getElementById('qck-date').value;
@@ -5488,9 +5756,13 @@ window.openQuickTransferForm = function () {
             if (soluong <= 0) { Swal.showValidationMessage('Số lượng phải > 0'); return false; }
             if (!lydo) { Swal.showValidationMessage('Vui lòng nhập lý do chuyển'); return false; }
 
-            // Kiểm tra tồn kho nguồn
+            // Kiểm tra tồn kho nguồn: phải có tồn > 0 và không vượt quá tồn
             var stock = getStockLevel(vattu, khoNguon);
-            if (stock !== null && soluong > stock) {
+            if (stock === null || stock <= 0) {
+                Swal.showValidationMessage('Kho nguồn không còn tồn vật tư đã chọn.');
+                return false;
+            }
+            if (soluong > stock) {
                 Swal.showValidationMessage('Kho nguồn không đủ! Tồn: ' + stock.toLocaleString() + ', cần: ' + soluong.toLocaleString());
                 return false;
             }
@@ -5630,28 +5902,35 @@ async function submitQuickTransfer(params) {
 // Cập nhật tồn kho sau khi chuyển: giảm kho nguồn, tăng kho đích
 async function updateInventoryForTransfer(vattuId, khoNguon, khoDich, soLuong) {
     try {
+        var stockKey = getStockFieldKey();
+
         // Giảm tồn kho nguồn
         var nguonTon = (GLOBAL_DATA['Tonkho'] || []).find(function (t) {
             return t['ID vật tư'] === vattuId && t['ID kho'] === khoNguon && t['Delete'] !== 'X';
         });
-        if (nguonTon) {
-            var newTonNguon = (parseFloat(nguonTon['Tồn kho']) || 0) - soLuong;
-            await callSupabase('update', 'Tonkho', { 'Tồn kho': newTonNguon }, nguonTon['ID_TonKho']);
+        if (nguonTon && stockKey) {
+            var newTonNguon = (parseFloat(nguonTon[stockKey]) || 0) - soLuong;
+            var updNguon = {}; updNguon[stockKey] = newTonNguon;
+            await callSupabase('update', 'Tonkho', updNguon, nguonTon['ID_TonKho']);
         }
 
         // Tăng tồn kho đích
         var dichTon = (GLOBAL_DATA['Tonkho'] || []).find(function (t) {
             return t['ID vật tư'] === vattuId && t['ID kho'] === khoDich && t['Delete'] !== 'X';
         });
-        if (dichTon) {
-            var newTonDich = (parseFloat(dichTon['Tồn kho']) || 0) + soLuong;
-            await callSupabase('update', 'Tonkho', { 'Tồn kho': newTonDich }, dichTon['ID_TonKho']);
-        } else {
-            await callSupabase('insert', 'Tonkho', {
-                'ID vật tư': vattuId,
-                'ID kho': khoDich,
-                'Tồn kho': soLuong
-            });
+        if (stockKey) {
+            if (dichTon) {
+                var newTonDich = (parseFloat(dichTon[stockKey]) || 0) + soLuong;
+                var updDich = {}; updDich[stockKey] = newTonDich;
+                await callSupabase('update', 'Tonkho', updDich, dichTon['ID_TonKho']);
+            } else {
+                var ins = {
+                    'ID vật tư': vattuId,
+                    'ID kho': khoDich
+                };
+                ins[stockKey] = soLuong;
+                await callSupabase('insert', 'Tonkho', ins);
+            }
         }
     } catch (inventoryError) {
         console.warn('Lỗi cập nhật tồn kho:', inventoryError);
