@@ -1323,3 +1323,385 @@ h6,
 .btn-group .btn-xs {
     margin: 0 1px;
 }
+
+/* ===============================================
+   BẢNG LƯƠNG - GIAO DIỆN CẢI THIỆN
+   =============================================== */
+
+/* Container bảng lương với thanh trượt ngang */
+.table-viewport:has(.payroll-table) {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: white;
+    overflow: hidden;
+}
+
+.table-responsive:has(.payroll-table) {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    border: none;
+}
+
+.table-responsive:has(.payroll-table)::-webkit-scrollbar {
+    height: 10px;
+}
+
+.table-responsive:has(.payroll-table)::-webkit-scrollbar-track {
+    background: #f8f9fa;
+    border-radius: 5px;
+}
+
+.table-responsive:has(.payroll-table)::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 5px;
+}
+
+.table-responsive:has(.payroll-table)::-webkit-scrollbar-thumb:hover {
+    background: #1e5e23;
+}
+
+/* Bảng lương styles */
+.payroll-table {
+    font-size: 11px !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    margin-bottom: 0 !important;
+    min-width: 1400px; /* Đảm bảo có thanh trượt ngang */
+}
+
+.payroll-table th {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    border-bottom: 2px solid #1e5e23 !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}
+
+.payroll-table .payroll-row {
+    transition: all 0.2s ease !important;
+    border-bottom: 1px solid #e9ecef !important;
+    animation: fadeInUp 0.3s ease-out !important;
+}
+
+.payroll-table .payroll-row:hover {
+    background-color: #fff3cd !important;
+    transform: translateX(2px) !important;
+    box-shadow: 2px 2px 6px rgba(0,0,0,0.1) !important;
+    border-left: 3px solid var(--primary-color) !important;
+}
+
+.payroll-table td {
+    padding: 8px 6px !important;
+    vertical-align: middle !important;
+    white-space: nowrap !important;
+    line-height: 1.4 !important;
+    border-right: 1px solid #e9ecef !important;
+    font-size: 11px !important;
+}
+
+/* Các cột tiền tệ với màu sắc phân biệt */
+.payroll-table td:nth-child(8),  /* Lương CB */
+.payroll-table td:nth-child(9),  /* Tiền TC */
+.payroll-table td:nth-child(10), /* Phụ cấp */
+.payroll-table td:nth-child(11)  /* Thưởng */
+{
+    color: #28a745 !important;
+    font-weight: 600 !important;
+}
+
+.payroll-table td:nth-child(12) { /* Tổng thu */
+    color: #007bff !important;
+    font-weight: 700 !important;
+    background-color: #f0f8ff !important;
+}
+
+.payroll-table td:nth-child(13), /* Tạm ứng */
+.payroll-table td:nth-child(14), /* Bảo hiểm */
+.payroll-table td:nth-child(15)  /* Giảm trừ */
+{
+    color: #dc3545 !important;
+    font-weight: 600 !important;
+}
+
+.payroll-table td:nth-child(16) { /* Thực lĩnh */
+    color: #6f42c1 !important;
+    font-weight: 700 !important;
+    background-color: #f8f5ff !important;
+    border-left: 2px solid #6f42c1 !important;
+}
+
+/* Animation */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Dòng tổng cộng */
+.payroll-table .table-warning {
+    background-color: #fff3cd !important;
+    border-top: 2px solid #ffc107 !important;
+    font-weight: 700 !important;
+}
+
+.payroll-table .table-warning td {
+    padding: 10px 6px !important;
+    font-size: 12px !important;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .payroll-table {
+        font-size: 9px !important;
+        min-width: 1200px;
+    }
+    
+    .payroll-table th,
+    .payroll-table td {
+        padding: 4px 3px !important;
+        font-size: 9px !important;
+    }
+    
+    .payroll-table th {
+        min-width: 50px !important;
+    }
+}
+
+/* Compact mode - Các dòng gần lại hơn */
+.payroll-table.compact {
+    font-size: 10px !important;
+}
+
+.payroll-table.compact th,
+.payroll-table.compact td {
+    padding: 4px 4px !important;
+    line-height: 1.2 !important;
+}
+
+/* Filter area cho bảng lương */
+.filter-area:has(#payroll-month-filter) {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+    border-bottom: 2px solid var(--primary-color) !important;
+    margin-bottom: 0 !important;
+}
+
+.filter-area:has(#payroll-month-filter) .form-select,
+.filter-area:has(#payroll-month-filter) .form-control {
+    border: 1px solid var(--primary-color) !important;
+    font-size: 11px !important;
+}
+
+.filter-area:has(#payroll-month-filter) .btn {
+    font-size: 11px !important;
+    padding: 6px 12px !important;
+}
+
+/* Caption bảng lương */
+.payroll-table caption {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #1e5e23 100%) !important;
+    color: white !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    padding: 10px !important;
+    margin: 0 !important;
+    border-radius: 8px 8px 0 0 !important;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3) !important;
+}
+
+/* ===============================================
+   ĐỊNH DẠNG SỐ LIỆU - PHÂN TÁCH HÀNG NGÀN
+   =============================================== */
+
+/* Cột tiền tệ - Căn phải, đậm, có phân tách hàng ngàn */
+.money-cell {
+    text-align: right !important;
+    font-weight: 600 !important;
+    font-family: 'Courier New', monospace !important;
+    color: #28a745 !important;
+    padding: 6px 8px !important;
+    background-color: #f8fff9 !important;
+}
+
+.money-cell:hover {
+    background-color: #e8f5e8 !important;
+}
+
+/* Cột số thông thường - Căn phải */
+.number-cell {
+    text-align: right !important;
+    font-weight: 500 !important;
+    font-family: 'Courier New', monospace !important;
+    color: #495057 !important;
+    padding: 6px 8px !important;
+    background-color: #fafafa !important;
+}
+
+.number-cell:hover {
+    background-color: #f0f0f0 !important;
+}
+
+/* Bảng lương - Các ô số với phân tách hàng ngàn */
+.payroll-number-cell {
+    text-align: right !important;
+    font-weight: 600 !important;
+    font-family: 'Be Vietnam Pro', 'Courier New', monospace !important;
+    padding: 6px 8px !important;
+    white-space: nowrap !important;
+    min-width: 80px !important;
+}
+
+.payroll-total-cell {
+    text-align: right !important;
+    font-weight: 700 !important;
+    font-family: 'Be Vietnam Pro', 'Courier New', monospace !important;
+    padding: 8px !important;
+    background-color: #fff3cd !important;
+    border: 1px solid #ffc107 !important;
+    font-size: 12px !important;
+}
+
+/* Tất cả bảng - Căn phải cho cột số */
+.custom-table td.text-end {
+    font-family: 'Be Vietnam Pro', 'Courier New', monospace !important;
+    letter-spacing: 0.5px !important;
+    min-width: 70px !important;
+}
+
+/* Hover effect cho dòng có số liệu */
+.custom-table tbody tr:hover .money-cell {
+    background-color: #d4edda !important;
+    transform: scale(1.02) !important;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.2) !important;
+}
+
+.custom-table tbody tr:hover .number-cell {
+    background-color: #e2e6ea !important;
+    transform: scale(1.02) !important;
+}
+
+/* Responsive cho số liệu trên mobile */
+@media (max-width: 768px) {
+    .money-cell,
+    .number-cell,
+    .payroll-number-cell {
+        font-size: 10px !important;
+        padding: 4px 6px !important;
+        min-width: 60px !important;
+    }
+    
+    .payroll-total-cell {
+        font-size: 10px !important;
+        padding: 6px !important;
+    }
+}
+
+/* Animation cho số liệu */
+.money-cell,
+.number-cell {
+    transition: all 0.2s ease !important;
+}
+
+/* Đánh dấu số âm */
+.money-cell.negative,
+.number-cell.negative {
+    color: #dc3545 !important;
+    background-color: #fff5f5 !important;
+}
+
+.money-cell.negative:before,
+.number-cell.negative:before {
+    content: "-";
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* Căn lề cho các cột đặc biệt */
+.text-end.fw-bold {
+    font-family: 'Be Vietnam Pro', 'Courier New', monospace !important;
+    letter-spacing: 0.3px !important;
+}
+
+/* Inline number formatting cho bảng con và popup */
+.money-cell-inline {
+    color: #28a745 !important;
+    font-weight: 600 !important;
+    font-family: 'Be Vietnam Pro', 'Courier New', monospace !important;
+    letter-spacing: 0.3px !important;
+}
+
+.number-cell-inline {
+    color: #495057 !important;
+    font-weight: 500 !important;
+    font-family: 'Be Vietnam Pro', 'Courier New', monospace !important;
+    letter-spacing: 0.3px !important;
+}
+
+.money-display {
+    color: #28a745 !important;
+    font-weight: 600 !important;
+    font-family: 'Be Vietnam Pro', 'Courier New', monospace !important;
+    letter-spacing: 0.5px !important;
+    padding: 2px 4px !important;
+    background-color: #f8fff9 !important;
+    border-radius: 3px !important;
+}
+
+.number-display {
+    color: #495057 !important;
+    font-weight: 500 !important;
+    font-family: 'Be Vietnam Pro', 'Courier New', monospace !important;
+    letter-spacing: 0.3px !important;
+    padding: 2px 4px !important;
+    background-color: #f8f9fa !important;
+    border-radius: 3px !important;
+}
+
+/* Đảm bảo tất cả số liệu đều căn phải */
+.custom-table td[class*="text-end"] {
+    text-align: right !important;
+}
+
+/* Header table - Căn phải cho cột số */
+.custom-table thead th:has(+ td.text-end),
+.custom-table thead th:nth-child(n+5) {
+    text-align: right !important;
+}
+
+/* Mobile - Thu nhỏ padding cho số liệu */
+@media (max-width: 768px) {
+    .money-cell-inline,
+    .number-cell-inline,
+    .money-display,
+    .number-display {
+        font-size: 9px !important;
+        padding: 1px 2px !important;
+        letter-spacing: 0.2px !important;
+    }
+    
+    .payroll-number-cell {
+        min-width: 50px !important;
+        font-size: 9px !important;
+        padding: 4px 6px !important;
+    }
+    
+    .payroll-total-cell {
+        font-size: 10px !important;
+        padding: 6px !important;
+    }
+}
+
+/* Highlight cho các ô có giá trị lớn */
+.money-cell-inline[data-value]:hover,
+.money-display[data-value]:hover {
+    background-color: #d4edda !important;
+    border: 1px solid #28a745 !important;
+}

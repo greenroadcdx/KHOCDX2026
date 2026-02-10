@@ -36,11 +36,104 @@ function updateNetworkStatus() {
             text.innerText = 'Đang trực tuyến';
             setTimeout(() => indicator.classList.add('d-none'), 3000);
             processOfflineQueue(); // Try to sync when back online
+            enableOnlineFeatures();
         } else {
             indicator.className = 'position-fixed top-0 end-0 m-2 badge bg-danger';
             text.innerText = 'Đang ngoại tuyến (Offline)';
+            enableOfflineMode();
         }
     }
+    
+    // Update mobile bottom navigation
+    updateMobileOfflineIndicator();
+}
+
+// Cải thiện tính năng offline cho mobile
+function enableOfflineMode() {
+    // Hiển thị thông báo offline cho mobile
+    if (window.innerWidth <= 768) {
+        const offlineBanner = document.createElement('div');
+        offlineBanner.id = 'mobile-offline-banner';
+        offlineBanner.className = 'alert alert-warning alert-dismissible fade show position-fixed w-100';
+        offlineBanner.style.cssText = 'top: 60px; z-index: 1030; margin: 0;';
+        offlineBanner.innerHTML = `
+            <i class="fas fa-wifi-slash me-2"></i>
+            <strong>Chế độ offline:</strong> Dữ liệu sẽ được lưu tạm và đồng bộ khi có mạng.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        // Remove existing banner if exists
+        const existing = document.getElementById('mobile-offline-banner');
+        if (existing) existing.remove();
+        
+        document.body.appendChild(offlineBanner);
+        
+        // Auto hide after 10 seconds
+        setTimeout(() => {
+            if (offlineBanner && offlineBanner.parentNode) {
+                offlineBanner.remove();
+            }
+        }, 10000);
+    }
+    
+    // Enable offline-only features
+    enableOfflineCache();
+    restrictOnlineOnlyFeatures();
+}
+
+function enableOnlineFeatures() {
+    // Remove offline banner
+    const offlineBanner = document.getElementById('mobile-offline-banner');
+    if (offlineBanner) offlineBanner.remove();
+    
+    // Re-enable online-only features
+    enableOnlineOnlyFeatures();
+}
+
+function updateMobileOfflineIndicator() {
+    const mobileNav = document.querySelector('.mobile-bottom-nav');
+    if (mobileNav) {
+        const indicator = mobileNav.querySelector('.offline-indicator') || document.createElement('div');
+        indicator.className = 'offline-indicator position-absolute';
+        indicator.style.cssText = 'top: -5px; right: 10px; z-index: 10;';
+        
+        if (!window.isOnline) {
+            indicator.innerHTML = '<i class="fas fa-wifi-slash text-danger" style="font-size: 12px;"></i>';
+            if (!mobileNav.contains(indicator)) mobileNav.appendChild(indicator);
+        } else {
+            if (mobileNav.contains(indicator)) indicator.remove();
+        }
+    }
+}
+
+function enableOfflineCache() {
+    // Lưu trữ dữ liệu quan trọng vào localStorage để sử dụng offline
+    const criticalTables = ['User', 'BangLuongThang', 'Chamcong', 'LichSuLuong', 'GiaoDichLuong'];
+    
+    criticalTables.forEach(table => {
+        if (GLOBAL_DATA[table]) {
+            localStorage.setItem(`offline_${table}`, JSON.stringify(GLOBAL_DATA[table]));
+        }
+    });
+    
+    localStorage.setItem('offline_last_sync', new Date().toISOString());
+}
+
+function restrictOnlineOnlyFeatures() {
+    // Disable các tính năng chỉ hoạt động online
+    const onlineOnlyButtons = document.querySelectorAll('[data-requires-online="true"]');
+    onlineOnlyButtons.forEach(btn => {
+        btn.disabled = true;
+        btn.title = 'Tính năng này cần kết nối mạng';
+    });
+}
+
+function enableOnlineOnlyFeatures() {
+    const onlineOnlyButtons = document.querySelectorAll('[data-requires-online="true"]');
+    onlineOnlyButtons.forEach(btn => {
+        btn.disabled = false;
+        btn.title = '';
+    });
 }
 
 // --- BIẾN TOÀN CỤC ---
@@ -336,8 +429,14 @@ const DROPDOWN_CONFIG = {
 
 // Kiểm tra cột tiền tệ để format phân tách hàng ngàn
 function isMoneyField(k) {
-    if (/^ID|GiaoDich|HeSo/i.test(k)) return false;
-    return /tien|tiền|luong|lương|don.?gia|dongia|đơn giá|giatri|giá trị|thanh.?tien|thành tiền|thuclanh|thực lãnh|thuc.?linh|phucap|phụ cấp|thuong|thưởng|thunhap|thu nhập|tamung|tạm ứng|baohiem|bảo hiểm|giamtru|giảm trừ|ngansach|ngân sách|sodu|số dư|tổng tiền|phatsinh|phát sinh/i.test(k);
+    if (/^ID|GiaoDich|HeSo|Thang|Nam|Tháng|Năm/i.test(k)) return false;
+    return /tien|tiền|luong|lương|don.?gia|dongia|đơn giá|giatri|giá trị|thanh.?tien|thành tiền|thuclanh|thực lãnh|thuc.?linh|phucap|phụ cấp|thuong|thưởng|thunhap|thu nhập|tamung|tạm ứng|baohiem|bảo hiểm|giamtru|giảm trừ|ngansach|ngân sách|sodu|số dư|tổng.*tien|tổng.*tiền|phatsinh|phát sinh|luong.*coban|lương.*cơ.*bản|tien.*tangca|tiền.*tăng.*ca|net.*salary|gross.*pay|so.*tien|số.*tiền/i.test(k);
+}
+
+// Kiểm tra cột số để format số thông thường
+function isNumericField(k) {
+    if (/^ID|Date|Ngay|GiaoDich|HeSo/i.test(k)) return false;
+    return /so.?luong|số lượng|soluong|so_luong|gio|giờ|hour|so.?ngay|số ngày|songay|so_ngay|so.?gio|số giờ|sogio|so_gio|ty.?le|tỷ lệ|tile|ti_le|phan.?tram|phần trăm|phantram|phan_tram|he.?so|hệ số|heso|he_so/i.test(k);
 }
 
 // Ràng buộc input cho các trường đặc biệt
@@ -345,6 +444,96 @@ const FIELD_CONSTRAINTS = {
     'HeSoTangCa': { type: 'number', min: 1.1, max: 1.9, step: 0.1, placeholder: 'Từ 1.1 đến 1.9' },
     'LuongCoBan_Ngay': { type: 'number', min: 0, step: 1000, placeholder: 'VNĐ / ngày' }
 };
+
+// === HÀM ĐỊNH DẠNG SỐ LIỆU ===
+function formatMoney(value, showCurrency = false) {
+    if (value === null || value === undefined || value === '') return '';
+    var num = parseFloat(value);
+    if (isNaN(num)) return '';
+    if (num === 0) return '0';
+    return num.toLocaleString('vi-VN') + (showCurrency ? ' đ' : '');
+}
+
+function formatNumber(value, decimals = 0) {
+    if (value === null || value === undefined || value === '') return '';
+    var num = parseFloat(value);
+    if (isNaN(num)) return '';
+    if (num === 0) return '0';
+    return decimals > 0 ? num.toFixed(decimals) : num.toLocaleString('vi-VN');
+}
+
+function formatPercentage(value, decimals = 1) {
+    if (value === null || value === undefined || value === '') return '';
+    var num = parseFloat(value);
+    if (isNaN(num)) return '';
+    return num.toFixed(decimals) + '%';
+}
+
+// === CHUYỂN ĐỔI SỐ THÀNH CHỮ ===
+function numberToVietnameseText(number) {
+    if (number === 0) return 'Không đồng';
+    
+    var ones = ['', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+    var tens = ['', '', 'hai mươi', 'ba mười', 'bốn mười', 'năm mười', 'sáu mười', 'bảy mười', 'tám mười', 'chín mười'];
+    var scales = ['', 'ngàn', 'triệu', 'tỷ', 'nghìn tỷ'];
+    
+    function convertHundreds(num) {
+        var result = '';
+        var hundred = Math.floor(num / 100);
+        var remainder = num % 100;
+        var ten = Math.floor(remainder / 10);
+        var one = remainder % 10;
+        
+        if (hundred > 0) {
+            result += ones[hundred] + ' trăm';
+        }
+        
+        if (ten >= 2) {
+            result += (result ? ' ' : '') + tens[ten];
+            if (one > 0) {
+                result += ' ' + ones[one];
+            }
+        } else if (ten === 1) {
+            result += (result ? ' ' : '') + 'mười';
+            if (one > 0) {
+                result += ' ' + ones[one];
+            }
+        } else if (one > 0) {
+            result += (result ? ' ' : '') + ones[one];
+        }
+        
+        return result;
+    }
+    
+    var isNegative = number < 0;
+    number = Math.abs(number);
+    
+    var groups = [];
+    while (number > 0) {
+        groups.push(number % 1000);
+        number = Math.floor(number / 1000);
+    }
+    
+    var result = '';
+    for (var i = groups.length - 1; i >= 0; i--) {
+        if (groups[i] > 0) {
+            var groupText = convertHundreds(groups[i]);
+            if (i > 0) {
+                groupText += ' ' + scales[i];
+            }
+            result += (result ? ' ' : '') + groupText;
+        }
+    }
+    
+    result = result.charAt(0).toUpperCase() + result.slice(1);
+    result += ' đồng';
+    
+    if (isNegative) {
+        result = 'Âm ' + result.toLowerCase();
+    }
+    
+    return result;
+}
 
 function getDropdownForField(sheet, fieldName) {
     var cfg = (DROPDOWN_CONFIG[sheet] && DROPDOWN_CONFIG[sheet][fieldName]) || (DROPDOWN_CONFIG['*'] && DROPDOWN_CONFIG['*'][fieldName]);
@@ -766,6 +955,259 @@ window.openSalaryForEmployee = function (empId, empName) {
     }
 }
 
+// --- RENDER BẢNG LƯƠNG VỚI GIAO DIỆN CẢI THIỆN ---
+function renderPayrollTable(data) {
+    data = Array.isArray(data) ? data : [];
+    
+    var table = document.getElementById('data-table');
+    var tb = document.querySelector('#data-table tbody');
+    var th = document.querySelector('#data-table thead');
+    if (!tb || !th) return;
+
+    // Thêm class đặc biệt cho bảng lương
+    table.classList.add('payroll-table');
+    
+    // Thêm bộ lọc tháng/năm cho bảng lương
+    var filterArea = document.getElementById('filter-area');
+    if (filterArea && !document.getElementById('payroll-month-filter')) {
+        var currentDate = new Date();
+        var currentMonth = currentDate.getMonth() + 1;
+        var currentYear = currentDate.getFullYear();
+
+        filterArea.innerHTML = `
+            <div class="d-flex gap-3 align-items-center flex-wrap">
+                <div>
+                    <label class="form-label small fw-bold text-muted mb-1">Tháng lương</label>
+                    <select id="payroll-month-filter" class="form-select form-select-sm" onchange="applyPayrollFilter()" style="min-width: 100px;">
+                        ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m =>
+                            `<option value="${m}" ${m === currentMonth ? 'selected' : ''}>Tháng ${m}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small fw-bold text-muted mb-1">Năm</label>
+                    <select id="payroll-year-filter" class="form-select form-select-sm" onchange="applyPayrollFilter()" style="min-width: 100px;">
+                        ${[2024, 2025, 2026, 2027].map(y =>
+                            `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="flex-grow-1">
+                    <label class="form-label small fw-bold text-muted mb-1">Tìm nhân viên</label>
+                    <input type="text" id="payroll-search" class="form-control form-control-sm" placeholder="Tìm theo mã hoặc tên..." oninput="applyPayrollFilter()">
+                </div>
+                <div>
+                    <label class="form-label small fw-bold text-muted mb-1">&nbsp;</label>
+                    <button class="btn btn-success btn-sm d-block me-2" onclick="calculateMonthlyPayroll()" title="Tính lương tháng">
+                        <i class="fas fa-calculator me-1"></i> Tính lương tháng
+                    </button>
+                </div>
+                <div>
+                    <label class="form-label small fw-bold text-muted mb-1">&nbsp;</label>
+                    <button class="btn btn-primary btn-sm d-block" onclick="openIndividualPayrollCalc()" title="Tính lương cá nhân">
+                        <i class="fas fa-user-check me-1"></i> Tính cá nhân
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // Lấy giá trị filter
+    var filterMonth = document.getElementById('payroll-month-filter')?.value || currentMonth;
+    var filterYear = document.getElementById('payroll-year-filter')?.value || currentYear;
+    var searchText = (document.getElementById('payroll-search')?.value || '').toLowerCase().trim();
+
+    // Lọc dữ liệu theo tháng/năm
+    var filteredData = data.filter(r => {
+        if (r['Delete'] === 'X') return false;
+        
+        var month = parseInt(r['Thang'] || r['Tháng']) || 0;
+        var year = parseInt(r['Nam'] || r['Năm']) || 0;
+        
+        if (filterMonth && month !== parseInt(filterMonth)) return false;
+        if (filterYear && year !== parseInt(filterYear)) return false;
+        
+        // Tìm kiếm theo tên hoặc mã nhân viên
+        if (searchText) {
+            var empName = (r['HoTen'] || r['Họ và tên'] || '').toLowerCase();
+            var empId = (r['ID_NhanVien'] || r['MaNhanVien'] || '').toLowerCase();
+            if (!empName.includes(searchText) && !empId.includes(searchText)) return false;
+        }
+        
+        return true;
+    });
+
+    th.innerHTML = '';
+    tb.innerHTML = '';
+
+    // Tạo tiêu đề bảng
+    var caption = table.querySelector('caption');
+    if (!caption) {
+        caption = document.createElement('caption');
+        caption.style.captionSide = 'top';
+        caption.className = 'text-center fw-bold text-success py-2';
+        table.insertBefore(caption, table.firstChild);
+    }
+    caption.innerHTML = `<i class="fas fa-money-check-alt me-2"></i>BẢNG LƯƠNG THÁNG ${filterMonth}/${filterYear}`;
+
+    // Tạo header với thanh trượt ngang
+    var headerRow = document.createElement('tr');
+    var headers = [
+        { text: 'STT', width: '50px' },
+        { text: 'Mã NV', width: '80px' },
+        { text: 'Họ tên', width: '150px' },
+        { text: 'Tháng', width: '60px' },
+        { text: 'Năm', width: '60px' },
+        { text: 'Giờ công', width: '80px' },
+        { text: 'Giờ TC', width: '80px' },
+        { text: 'Lương CB', width: '100px' },
+        { text: 'Tiền TC', width: '100px' },
+        { text: 'Phụ cấp', width: '90px' },
+        { text: 'Thưởng', width: '90px' },
+        { text: 'Tổng thu', width: '110px' },
+        { text: 'Tạm ứng', width: '90px' },
+        { text: 'Bảo hiểm', width: '90px' },
+        { text: 'Giảm trừ', width: '90px' },
+        { text: 'Thực lĩnh', width: '110px' },
+        { text: 'Thao tác', width: '100px' }
+    ];
+
+    headers.forEach((h, index) => {
+        var th = document.createElement('th');
+        th.innerText = h.text;
+        
+        // Căn phải cho các cột số liệu (từ cột 5 trở đi)
+        if (index >= 5 && index <= 15) {
+            th.className = 'text-end bg-success text-white sticky-header';
+        } else {
+            th.className = 'text-center bg-success text-white sticky-header';
+        }
+        
+        th.style.minWidth = h.width;
+        th.style.fontSize = '11px';
+        th.style.padding = '8px 4px';
+        th.style.lineHeight = '1.2';
+        headerRow.appendChild(th);
+    });
+    th.appendChild(headerRow);
+
+    // Render dữ liệu với các dòng gần lại
+    filteredData.forEach((record, index) => {
+        var tr = document.createElement('tr');
+        tr.className = 'payroll-row';
+        tr.style.cursor = 'pointer';
+        tr.onclick = function() { showPayrollDetail(record, filterMonth, filterYear); };
+        
+        // Hover effect
+        tr.onmouseenter = function() { this.style.backgroundColor = '#f8f9fa'; };
+        tr.onmouseleave = function() { this.style.backgroundColor = ''; };
+
+        // Tính toán các giá trị lương
+        var totalHours = parseFloat(record['TongGioCong']) || 0;
+        var totalOvertime = parseFloat(record['TongGioTangCa']) || 0;
+        var basicSalary = parseFloat(record['TongLuongCoBan']) || 0;
+        var overtimePay = parseFloat(record['TongTienTangCa']) || 0;
+        var allowance = parseFloat(record['TongPhuCap']) || 0;
+        var bonus = parseFloat(record['TongThuong']) || 0;
+        var totalIncome = basicSalary + overtimePay + allowance + bonus;
+        var advance = parseFloat(record['TongTamUng']) || 0;
+        var insurance = parseFloat(record['TongBaoHiem']) || 0;
+        var deduction = parseFloat(record['TongGiamTru']) || 0;
+        var netSalary = totalIncome - advance - insurance - deduction;
+
+        var cells = [
+            index + 1,
+            record['ID_NhanVien'] || record['MaNhanVien'] || '',
+            record['HoTen'] || record['Họ và tên'] || '',
+            record['Thang'] || record['Tháng'] || '',
+            record['Nam'] || record['Năm'] || '',
+            formatNumber(totalHours, 1), // Giờ công với 1 số thập phân
+            formatNumber(totalOvertime, 1), // Giờ TC với 1 số thập phân
+            formatMoney(basicSalary), // Lương CB với phân tách hàng ngàn
+            formatMoney(overtimePay), // Tiền TC với phân tách hàng ngàn
+            formatMoney(allowance), // Phụ cấp với phân tách hàng ngàn
+            formatMoney(bonus), // Thưởng với phân tách hàng ngàn
+            formatMoney(totalIncome), // Tổng thu với phân tách hàng ngàn
+            formatMoney(advance), // Tạm ứng với phân tách hàng ngàn
+            formatMoney(insurance), // Bảo hiểm với phân tách hàng ngàn
+            formatMoney(deduction), // Giảm trừ với phân tách hàng ngàn
+            formatMoney(netSalary), // Thực lĩnh với phân tách hàng ngàn
+            `<button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showPayrollDetail(${JSON.stringify(record).replace(/"/g, '&quot;')}, ${filterMonth}, ${filterYear})">
+                <i class="fas fa-eye"></i>
+            </button>`
+        ];
+
+        cells.forEach((cellData, cellIndex) => {
+            var td = document.createElement('td');
+            if (cellIndex === 0 || cellIndex === 3 || cellIndex === 4) {
+                td.className = 'text-center'; // STT, Tháng, Năm căn giữa
+            } else if (cellIndex === 1 || cellIndex === 2) {
+                td.className = 'text-start'; // Mã NV và Tên căn trái
+            } else if (cellIndex >= 5 && cellIndex <= 15) {
+                td.className = 'text-end fw-bold payroll-number-cell'; // Tất cả số liệu căn phải
+                // Màu sắc phân biệt
+                if (cellIndex === 11) td.style.color = '#28a745'; // Tổng thu - xanh
+                if (cellIndex === 15) td.style.color = '#6f42c1'; // Thực lĩnh - tím
+                if (cellIndex >= 12 && cellIndex <= 14) td.style.color = '#dc3545'; // Các khoản trừ - đỏ
+                if (cellIndex >= 7 && cellIndex <= 10) td.style.color = '#28a745'; // Các khoản thu - xanh
+            } else if (cellIndex === 16) {
+                td.className = 'text-center';
+                td.innerHTML = cellData;
+                tr.appendChild(td);
+                return;
+            }
+            
+            td.innerHTML = cellData;
+            td.style.fontSize = '11px';
+            td.style.padding = '6px 4px';
+            td.style.lineHeight = '1.3';
+            tr.appendChild(td);
+        });
+
+        tb.appendChild(tr);
+    });
+
+    // Thêm dòng tổng cộng
+    if (filteredData.length > 0) {
+        var totalRow = document.createElement('tr');
+        totalRow.className = 'table-warning fw-bold';
+        
+        var totalBasic = filteredData.reduce((sum, r) => sum + (parseFloat(r['TongLuongCoBan']) || 0), 0);
+        var totalOvertime = filteredData.reduce((sum, r) => sum + (parseFloat(r['TongTienTangCa']) || 0), 0);
+        var totalAllowance = filteredData.reduce((sum, r) => sum + (parseFloat(r['TongPhuCap']) || 0), 0);
+        var totalBonus = filteredData.reduce((sum, r) => sum + (parseFloat(r['TongThuong']) || 0), 0);
+        var totalIncome = totalBasic + totalOvertime + totalAllowance + totalBonus;
+        var totalAdvance = filteredData.reduce((sum, r) => sum + (parseFloat(r['TongTamUng']) || 0), 0);
+        var totalInsurance = filteredData.reduce((sum, r) => sum + (parseFloat(r['TongBaoHiem']) || 0), 0);
+        var totalDeduction = filteredData.reduce((sum, r) => sum + (parseFloat(r['TongGiamTru']) || 0), 0);
+        var totalNet = totalIncome - totalAdvance - totalInsurance - totalDeduction;
+
+        totalRow.innerHTML = `
+            <td class="text-center">-</td>
+            <td class="text-center"><strong>TỔNG CỘNG</strong></td>
+            <td class="text-center">${filteredData.length} người</td>
+            <td class="text-center">-</td>
+            <td class="text-center">-</td>
+            <td class="text-center">-</td>
+            <td class="text-center">-</td>
+            <td class="text-end payroll-total-cell"><strong>${formatMoney(totalBasic)}</strong></td>
+            <td class="text-end payroll-total-cell"><strong>${formatMoney(totalOvertime)}</strong></td>
+            <td class="text-end payroll-total-cell"><strong>${formatMoney(totalAllowance)}</strong></td>
+            <td class="text-end payroll-total-cell"><strong>${formatMoney(totalBonus)}</strong></td>
+            <td class="text-end payroll-total-cell text-success"><strong>${formatMoney(totalIncome)}</strong></td>
+            <td class="text-end payroll-total-cell"><strong>${formatMoney(totalAdvance)}</strong></td>
+            <td class="text-end payroll-total-cell"><strong>${formatMoney(totalInsurance)}</strong></td>
+            <td class="text-end payroll-total-cell"><strong>${formatMoney(totalDeduction)}</strong></td>
+            <td class="text-end payroll-total-cell text-primary"><strong>${formatMoney(totalNet)}</strong></td>
+            <td class="text-center">-</td>
+        `;
+        
+        tb.appendChild(totalRow);
+    } else {
+        tb.innerHTML = '<tr><td colspan="17" class="text-center p-4 text-muted">Không có dữ liệu lương cho tháng này</td></tr>';
+    }
+}
+
 // --- RENDER BẢNG CHẤM CÔNG DẠNG PIVOT ---
 function renderAttendanceTable(data) {
     data = Array.isArray(data) ? data : [];
@@ -1119,6 +1561,950 @@ window.showEmployeeSalaryDetail = function(emp, month, year) {
             popup: 'rounded-4 shadow-lg',
             title: 'text-success'
         }
+    });
+}
+
+// --- POPUP CHI TIẾT LƯƠNG THEO ĐỊNH DẠNG MẪUI ---
+window.showPayrollDetail = function(record, month, year) {
+    if (!record) return;
+    
+    var empId = record['ID_NhanVien'] || record['MaNhanVien'] || '';
+    var empName = record['HoTen'] || record['Họ và tên'] || empId;
+    
+    // Lấy thông tin từ các bảng liên quan
+    var userData = GLOBAL_DATA['User'] || [];
+    var salarySettingData = GLOBAL_DATA['LichSuLuong'] || [];
+    var attendanceData = GLOBAL_DATA['Chamcong'] || [];
+    
+    var empInfo = userData.find(u => u['ID'] === empId);
+    var salarySetting = salarySettingData.find(s => s['ID_NhanVien'] === empId);
+    
+    // Tính toán kỳ lương và số ngày công
+    var kyLuongStart = record['KyLuong_TuNgay'] || `01/${month}/${year}`;
+    var kyLuongEnd = record['KyLuong_DenNgay'] || `${new Date(year, month, 0).getDate()}/${month}/${year}`;
+    
+    // Đếm số ngày công thực tế từ chấm công
+    var workDays = attendanceData.filter(a => {
+        if (a['Delete'] === 'X' || a['ID_NhanVien'] !== empId) return false;
+        var dateStr = a['Ngày'] || a['Ngay'];
+        if (!dateStr) return false;
+        var date = new Date(dateStr);
+        return date.getMonth() + 1 === parseInt(month) && date.getFullYear() === parseInt(year);
+    }).length;
+    
+    // Thông tin lương từ record hoặc tính toán
+    var totalHours = parseFloat(record['TongGioCong']) || 0;
+    var totalOvertime = parseFloat(record['TongGioTangCa']) || 0;
+    var basicSalary = parseFloat(record['TongLuongCoBan']) || 0;
+    var overtimePay = parseFloat(record['TongTienTangCa']) || 0;
+    var allowance = parseFloat(record['TongPhuCap']) || 0;
+    var bonus = parseFloat(record['TongThuong']) || 0;
+    var totalIncome = basicSalary + overtimePay + allowance + bonus;
+    
+    var advance = parseFloat(record['TongTamUng']) || 0;
+    var insurance = parseFloat(record['TongBaoHiem']) || 0;
+    var previousDebt = parseFloat(record['NoThangTruoc']) || 0;
+    var otherDeductions = parseFloat(record['TongGiamTru']) || 0;
+    var totalDeductions = advance + insurance + previousDebt + otherDeductions;
+    
+    var netSalary = totalIncome - totalDeductions;
+    var netSalaryText = numberToVietnameseText(Math.abs(netSalary));
+    
+    // Tạo HTML giống hình mẫu
+    var html = `
+        <div id="payroll-detail-content" style="font-size: 14px; text-align: left; background: white; padding: 20px; border-radius: 8px;">
+            <div class="payroll-detail-table" style="border: 2px solid #000; border-collapse: collapse; width: 100%; font-family: 'Be Vietnam Pro', sans-serif;">
+                <table style="width: 100%; border-collapse: collapse; background: white;">
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa; width: 35%;">
+                            Tên nhân viên:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 700; color: #2E7D32;">
+                            ${empName}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Kỳ lương:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600;">
+                            từ ${kyLuongStart} -> hết ${kyLuongEnd}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Giờ công:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600;">
+                            <span style="color: #dc3545; font-weight: 700; font-size: 16px;">${formatNumber(totalHours, 1)} giờ</span> 
+                            <span style="color: #666;">(${workDays} ngày)</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Tăng ca:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600;">
+                            ${formatNumber(totalOvertime, 1)} giờ
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Lương cơ bản:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; font-family: 'Courier New', monospace;">
+                            ${formatMoney(basicSalary)} đ
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Tiền tăng ca:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; font-family: 'Courier New', monospace;">
+                            ${formatMoney(overtimePay)} đ
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Phụ cấp:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; font-family: 'Courier New', monospace;">
+                            ${formatMoney(allowance)} đ
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Thưởng:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; font-family: 'Courier New', monospace;">
+                            ${formatMoney(bonus)} đ
+                        </td>
+                    </tr>
+                    <tr style="background: #e8f5e8;">
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 700; font-size: 16px; background: #e8f5e8;">
+                            TỔNG THU NHẬP:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 700; color: #28a745; font-size: 16px; font-family: 'Courier New', monospace; background: #e8f5e8;">
+                            ${formatMoney(totalIncome)} đ
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Tạm ứng:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; font-family: 'Courier New', monospace; color: #dc3545;">
+                            ${formatMoney(advance)} đ
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Bảo hiểm:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; font-family: 'Courier New', monospace;">
+                            ${formatMoney(insurance)} đ
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Giảm trừ:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; font-family: 'Courier New', monospace;">
+                            ${formatMoney(otherDeductions)} đ
+                        </td>
+                    </tr>
+                    <tr style="background: #ffeaea;">
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 700; font-size: 16px; background: #ffeaea;">
+                            TỔNG GIẢM:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 700; color: #dc3545; font-size: 16px; font-family: 'Courier New', monospace; background: #ffeaea;">
+                            ${formatMoney(totalDeductions)} đ
+                        </td>
+                    </tr>
+                    <tr style="background: ${netSalary >= 0 ? '#e3f2fd' : '#ffebee'};">
+                        <td style="border: 2px solid #000; padding: 15px; font-weight: 700; font-size: 18px; background: ${netSalary >= 0 ? '#e3f2fd' : '#ffebee'};">
+                            CÒN ĐƯỢC NHẬN:
+                        </td>
+                        <td style="border: 2px solid #000; padding: 15px; font-weight: 700; color: ${netSalary >= 0 ? '#1976d2' : '#d32f2f'}; font-size: 18px; font-family: 'Courier New', monospace; background: ${netSalary >= 0 ? '#e3f2fd' : '#ffebee'};">
+                            ${netSalary >= 0 ? '' : '-'}${formatMoney(Math.abs(netSalary))} đ
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Bằng chữ:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-style: italic; color: #666; line-height: 1.4;">
+                            ${netSalary < 0 ? 'Âm ' : ''}${netSalaryText.toLowerCase()}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border: 1px solid #000; padding: 12px 15px; font-weight: 600; background: #f8f9fa;">
+                            Ghi chú:
+                        </td>
+                        <td style="border: 1px solid #000; padding: 12px 15px;">
+                            ${record['GhiChu'] || record['Ghi chú'] || 'Bảng tính lương'}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="mt-4 d-flex gap-2 justify-content-center flex-wrap">
+                <button class="btn btn-success btn-sm" onclick="exportPayrollImage('${empId}', ${month}, ${year})">
+                    <i class="fas fa-image me-1"></i> Xuất hình ảnh
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="exportPayrollPDF('${empId}', ${month}, ${year})">
+                    <i class="fas fa-file-pdf me-1"></i> Xuất PDF
+                </button>
+                <button class="btn btn-warning btn-sm" onclick="Swal.close(); openIndividualPayrollCalc('${empId}')">
+                    <i class="fas fa-calculator me-1"></i> Tính lại
+                </button>
+                <button class="btn btn-info btn-sm" onclick="Swal.close(); viewPayrollHistory('${empId}')">
+                    <i class="fas fa-history me-1"></i> Lịch sử
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="sendPayrollToEmployee('${empId}', ${month}, ${year})" data-requires-online="true">
+                    <i class="fas fa-share me-1"></i> Gửi nhân viên
+                </button>
+            </div>
+        </div>
+    `;
+    
+    Swal.fire({
+        title: '',
+        html: html,
+        width: '650px',
+        showCloseButton: true,
+        showConfirmButton: false,
+        customClass: {
+            popup: 'rounded-4 shadow-lg border-0',
+            title: 'd-none'
+        }
+    });
+}
+
+// --- XUẤT HÌNH ẢNH BẢNG LƯƠNG ---
+window.exportPayrollImage = function(empId, month, year) {
+    Swal.fire({
+        title: 'Xuất hình ảnh bảng lương',
+        text: 'Đang tạo hình ảnh bảng lương...',
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // Delay để đảm bảo Swal hiển thị
+    setTimeout(() => {
+        try {
+            // Lấy dữ liệu nhân viên và lương
+            var userData = GLOBAL_DATA['User'] || [];
+            var payrollData = GLOBAL_DATA['BangLuongThang'] || [];
+            var record = payrollData.find(p => 
+                p['ID_NhanVien'] === empId &&
+                parseInt(p['Thang'] || p['Tháng']) === parseInt(month) &&
+                parseInt(p['Nam'] || p['Năm']) === parseInt(year)
+            );
+            
+            if (!record) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Không tìm thấy dữ liệu',
+                    text: 'Không tìm thấy bảng lương cho nhân viên này trong tháng đã chọn',
+                    confirmButtonColor: '#ffc107'
+                });
+                return;
+            }
+            
+            var empInfo = userData.find(u => u['ID'] === empId);
+            var empName = record['HoTen'] || record['Họ và tên'] || empId;
+            
+            // Tính toán các giá trị
+            var basicSalary = parseFloat(record['TongLuongCoBan']) || 0;
+            var overtimePay = parseFloat(record['TongTienTangCa']) || 0;
+            var allowance = parseFloat(record['TongPhuCap']) || 0;
+            var bonus = parseFloat(record['TongThuong']) || 0;
+            var totalIncome = basicSalary + overtimePay + allowance + bonus;
+            
+            var advance = parseFloat(record['TongTamUng']) || 0;
+            var insurance = parseFloat(record['TongBaoHiem']) || 0;
+            var deductions = parseFloat(record['TongGiamTru']) || 0;
+            var totalDeductions = advance + insurance + deductions;
+            
+            var netSalary = totalIncome - totalDeductions;
+            var netSalaryText = numberToVietnameseText(Math.abs(netSalary));
+            
+            // Tạo canvas để vẽ bảng lương
+            var canvas = document.createElement('canvas');
+            var ctx = canvas.getContext('2d');
+            
+            // Kích thước canvas
+            canvas.width = 800;
+            canvas.height = 600;
+            
+            // Nền trắng
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Font chữ
+            ctx.font = 'bold 24px Be Vietnam Pro, Arial';
+            ctx.fillStyle = '#2E7D32';
+            ctx.textAlign = 'center';
+            ctx.fillText('BẢNG LƯƠNG CHI TIẾT', canvas.width / 2, 40);
+            
+            // Thông tin cơ bản
+            ctx.font = '16px Be Vietnam Pro, Arial';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#000000';
+            
+            var y = 80;
+            var lineHeight = 30;
+            var leftMargin = 50;
+            
+            var payrollInfo = [
+                ['Tên nhân viên:', empName],
+                ['Kỳ lương:', `từ 01/${month}/${year} -> hết 31/${month}/${year}`],
+                ['Giờ công:', `${formatNumber(parseFloat(record['TongGioCong']) || 0, 1)} giờ`],
+                ['Tăng ca:', `${formatNumber(parseFloat(record['TongGioTangCa']) || 0, 1)} giờ`],
+                ['Lương cơ bản:', `${formatMoney(basicSalary)} đ`],
+                ['Tiền tăng ca:', `${formatMoney(overtimePay)} đ`],
+                ['Phụ cấp:', `${formatMoney(allowance)} đ`],
+                ['Thưởng:', `${formatMoney(bonus)} đ`],
+                ['TỔNG THU NHẬP:', `${formatMoney(totalIncome)} đ`],
+                ['Tạm ứng:', `${formatMoney(advance)} đ`],
+                ['Bảo hiểm:', `${formatMoney(insurance)} đ`],
+                ['Giảm trừ:', `${formatMoney(deductions)} đ`],
+                ['TỔNG GIẢM:', `${formatMoney(totalDeductions)} đ`],
+                ['CÒN ĐƯỢC NHẬN:', `${netSalary >= 0 ? '' : '-'}${formatMoney(Math.abs(netSalary))} đ`],
+                ['Bằng chữ:', netSalary < 0 ? 'Âm ' + netSalaryText.toLowerCase() : netSalaryText],
+                ['Ghi chú:', record['GhiChu'] || 'Bảng tính lương']
+            ];
+            
+            payrollInfo.forEach((info, index) => {
+                var currentY = y + (index * lineHeight);
+                
+                // Vẽ nền cho các dòng quan trọng
+                if (info[0].includes('TỔNG THU NHẬP') || info[0].includes('TỔNG GIẢM') || info[0].includes('CÒN ĐƯỢC NHẬN')) {
+                    ctx.fillStyle = info[0].includes('THU NHẬP') ? '#e8f5e8' : info[0].includes('GIẢM') ? '#ffeaea' : '#e3f2fd';
+                    ctx.fillRect(leftMargin - 10, currentY - 20, canvas.width - 100, lineHeight);
+                }
+                
+                // Vẽ text
+                ctx.fillStyle = '#000000';
+                ctx.font = info[0].includes('TỔNG') || info[0].includes('CÒN ĐƯỢC') ? 'bold 16px Be Vietnam Pro, Arial' : '14px Be Vietnam Pro, Arial';
+                ctx.fillText(info[0], leftMargin, currentY);
+                
+                ctx.fillStyle = info[0].includes('THU NHẬP') ? '#28a745' : 
+                              info[0].includes('GIẢM') ? '#dc3545' : 
+                              info[0].includes('CÒN ĐƯỢC') ? (netSalary >= 0 ? '#1976d2' : '#d32f2f') : '#000000';
+                ctx.font = info[0].includes('TỔNG') || info[0].includes('CÒN ĐƯỢC') ? 'bold 16px Courier New, monospace' : '14px Courier New, monospace';
+                ctx.textAlign = 'right';
+                ctx.fillText(info[1], canvas.width - leftMargin, currentY);
+                ctx.textAlign = 'left';
+            });
+            
+            // Chuyển canvas thành blob và download
+            canvas.toBlob(function(blob) {
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = `BangLuong_${empName.replace(/\s+/g, '_')}_${month}_${year}.png`;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Thành công!',
+                    text: `Đã xuất hình ảnh bảng lương cho ${empName}`,
+                    confirmButtonColor: '#28a745'
+                });
+            }, 'image/png');
+            
+        } catch (error) {
+            console.error('Lỗi xuất hình ảnh:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Lỗi xuất hình ảnh',
+                text: error.message || 'Có lỗi xảy ra khi tạo hình ảnh',
+                confirmButtonColor: '#dc3545'
+            });
+        }
+    }, 500);
+}
+
+// --- XUẤT PDF BẢNG LƯƠNG ---
+window.exportPayrollPDF = function(empId, month, year) {
+    Swal.fire({
+        icon: 'info',
+        title: 'Xuất PDF',
+        text: 'Chức năng xuất PDF đang được phát triển...',
+        confirmButtonColor: '#2E7D32'
+    });
+}
+
+// --- GỬI BẢNG LƯƠNG CHO NHÂN VIÊN ---
+window.sendPayrollToEmployee = function(empId, month, year) {
+    if (!window.isOnline) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Cần kết nối mạng',
+            text: 'Tính năng gửi bảng lương cần có kết nối internet',
+            confirmButtonColor: '#ffc107'
+        });
+        return;
+    }
+    
+    Swal.fire({
+        icon: 'info',
+        title: 'Gửi bảng lương',
+        text: 'Chức năng gửi bảng lương qua email/SMS đang được phát triển...',
+        confirmButtonColor: '#2E7D32'
+    });
+}
+
+// --- TÍNH LƯƠNG THÁNG TỰ ĐỘNG ---
+window.calculateMonthlyPayroll = function() {
+    var month = document.getElementById('payroll-month-filter')?.value;
+    var year = document.getElementById('payroll-year-filter')?.value;
+    
+    if (!month || !year) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Thiếu thông tin',
+            text: 'Vui lòng chọn tháng và năm để tính lương',
+            confirmButtonColor: '#2E7D32'
+        });
+        return;
+    }
+    
+    Swal.fire({
+        title: 'Tính lương tháng',
+        html: `
+            <div style="text-align: left;">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Tính lương tháng ${month}/${year}</strong><br>
+                    Hệ thống sẽ tự động tính lương cho tất cả nhân viên dựa trên:
+                    <ul class="mt-2 mb-0">
+                        <li>Dữ liệu chấm công trong tháng</li>
+                        <li>Cài đặt lương cá nhân (LichSuLuong)</li>
+                        <li>Tạm ứng và phụ cấp (GiaoDichLuong)</li>
+                    </ul>
+                </div>
+                
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="overwrite-existing">
+                    <label class="form-check-label" for="overwrite-existing">
+                        Ghi đè dữ liệu lương đã có (nếu tháng này đã tính)
+                    </label>
+                </div>
+            </div>
+        `,
+        width: '600px',
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-calculator me-1"></i> Bắt đầu tính lương',
+        cancelButtonText: 'Hủy',
+        confirmButtonColor: '#2E7D32',
+        preConfirm: () => {
+            return {
+                month: month,
+                year: year,
+                overwrite: document.getElementById('overwrite-existing').checked
+            };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            processMonthlyPayroll(result.value);
+        }
+    });
+}
+
+// --- XỬ LÝ TÍNH LƯƠNG THÁNG ---
+async function processMonthlyPayroll(params) {
+    showLoading(true, 'Đang tính lương tháng...');
+    
+    try {
+        var userData = GLOBAL_DATA['User'] || [];
+        var attendanceData = GLOBAL_DATA['Chamcong'] || [];
+        var salarySettingData = GLOBAL_DATA['LichSuLuong'] || [];
+        var transactionData = GLOBAL_DATA['GiaoDichLuong'] || [];
+        var existingPayroll = GLOBAL_DATA['BangLuongThang'] || [];
+        
+        var activeUsers = userData.filter(u => 
+            u['Delete'] !== 'X' && 
+            (u['Tinh luong'] !== 'Không' && u['Tinh luong'] !== 'No')
+        );
+        
+        var results = [];
+        var processed = 0;
+        
+        for (let user of activeUsers) {
+            var empId = user['ID'];
+            var empName = user['Họ và tên'] || user['HoTen'] || empId;
+            
+            // Kiểm tra đã có lương tháng này chưa
+            var existingRecord = existingPayroll.find(p => 
+                p['ID_NhanVien'] === empId &&
+                parseInt(p['Thang'] || p['Tháng']) === parseInt(params.month) &&
+                parseInt(p['Nam'] || p['Năm']) === parseInt(params.year)
+            );
+            
+            if (existingRecord && !params.overwrite) {
+                continue; // Bỏ qua nếu đã có và không ghi đè
+            }
+            
+            // Lấy dữ liệu chấm công trong tháng
+            var monthlyAttendance = attendanceData.filter(a => {
+                if (a['Delete'] === 'X' || a['ID_NhanVien'] !== empId) return false;
+                
+                var dateStr = a['Ngày'] || a['Ngay'];
+                if (!dateStr) return false;
+                
+                var date = new Date(dateStr);
+                return date.getMonth() + 1 === parseInt(params.month) && 
+                       date.getFullYear() === parseInt(params.year);
+            });
+            
+            // Tính tổng giờ
+            var totalHours = monthlyAttendance.reduce((sum, a) => sum + (parseFloat(a['SoGioCong']) || 0), 0);
+            var totalOvertime = monthlyAttendance.reduce((sum, a) => sum + (parseFloat(a['SoGioTangCa']) || 0), 0);
+            
+            // Lấy cài đặt lương
+            var salarySetting = salarySettingData.find(s => s['ID_NhanVien'] === empId);
+            var basicSalaryPerDay = parseFloat(salarySetting?.['LuongCoBan_Ngay']) || 45000;
+            var overtimeRate = parseFloat(salarySetting?.['HeSoTangCa']) || 1.5;
+            
+            // Tính lương
+            var basicSalary = totalHours * basicSalaryPerDay;
+            var overtimePay = totalOvertime * basicSalaryPerDay * overtimeRate;
+            
+            // Lấy phụ cấp và thưởng từ GiaoDichLuong
+            var monthlyTransactions = transactionData.filter(t => {
+                if (t['Delete'] === 'X') return false;
+                
+                var transDate = new Date(t['NgayGiaoDich']);
+                return transDate.getMonth() + 1 === parseInt(params.month) && 
+                       transDate.getFullYear() === parseInt(params.year) &&
+                       (t['ID_NhanVien'] === empId || t['MaNhanVien'] === empId);
+            });
+            
+            var allowance = monthlyTransactions
+                .filter(t => (t['LoaiGiaoDich'] || '').toLowerCase().includes('phụ cấp'))
+                .reduce((sum, t) => sum + (parseFloat(t['SoTien']) || 0), 0);
+                
+            var bonus = monthlyTransactions
+                .filter(t => (t['LoaiGiaoDich'] || '').toLowerCase().includes('thưởng'))
+                .reduce((sum, t) => sum + (parseFloat(t['SoTien']) || 0), 0);
+                
+            var advance = monthlyTransactions
+                .filter(t => (t['LoaiGiaoDich'] || '').toLowerCase().includes('tạm ứng'))
+                .reduce((sum, t) => sum + (parseFloat(t['SoTien']) || 0), 0);
+            
+            // Tổng thu và thực lĩnh
+            var totalIncome = basicSalary + overtimePay + allowance + bonus;
+            var netSalary = totalIncome - advance;
+            
+            // Tạo/cập nhật bản ghi lương
+            var payrollRecord = {
+                'ID_BangLuong': existingRecord?.['ID_BangLuong'] || `${empId}-${params.year}${params.month.padStart(2, '0')}`,
+                'ID_NhanVien': empId,
+                'HoTen': empName,
+                'Thang': parseInt(params.month),
+                'Nam': parseInt(params.year),
+                'NgayTinhLuong': new Date().toISOString().split('T')[0],
+                'TongGioCong': totalHours,
+                'TongGioTangCa': totalOvertime,
+                'TongLuongCoBan': basicSalary,
+                'TongTienTangCa': overtimePay,
+                'TongPhuCap': allowance,
+                'TongThuong': bonus,
+                'TongThuNhap': totalIncome,
+                'TongTamUng': advance,
+                'TongBaoHiem': 0, // Có thể thêm logic tính bảo hiểm
+                'TongGiamTru': 0,
+                'ThucLinh': netSalary
+            };
+            
+            // Lưu vào database
+            var saveResult;
+            if (existingRecord) {
+                saveResult = await callSupabase('update', 'BangLuongThang', payrollRecord, existingRecord['ID_BangLuong']);
+            } else {
+                saveResult = await callSupabase('insert', 'BangLuongThang', payrollRecord);
+            }
+            
+            if (saveResult.status === 'success') {
+                results.push({
+                    empId: empId,
+                    empName: empName,
+                    totalHours: totalHours,
+                    totalOvertime: totalOvertime,
+                    netSalary: netSalary,
+                    status: 'success'
+                });
+            } else {
+                results.push({
+                    empId: empId,
+                    empName: empName,
+                    status: 'error',
+                    message: saveResult.message
+                });
+            }
+            
+            processed++;
+        }
+        
+        // Refresh dữ liệu
+        await refreshSingleSheet('BangLuongThang');
+        
+        showLoading(false);
+        
+        // Hiển thị kết quả
+        var successCount = results.filter(r => r.status === 'success').length;
+        var errorCount = results.filter(r => r.status === 'error').length;
+        
+        var resultHtml = `
+            <div style="text-align: left;">
+                <div class="alert alert-success">
+                    <h6><i class="fas fa-check-circle me-2"></i>Hoàn thành tính lương tháng ${params.month}/${params.year}</h6>
+                    <div class="row">
+                        <div class="col-6"><strong>Thành công:</strong> ${successCount} nhân viên</div>
+                        <div class="col-6"><strong>Lỗi:</strong> ${errorCount} nhân viên</div>
+                    </div>
+                </div>
+                
+                ${successCount > 0 ? `
+                <div class="mb-3">
+                    <h6>Danh sách đã tính lương:</h6>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        <table class="table table-sm">
+                            <thead><tr><th>Mã NV</th><th>Tên</th><th>Giờ công</th><th>Thực lĩnh</th></tr></thead>
+                            <tbody>
+                                ${results.filter(r => r.status === 'success').map(r => 
+                                    `<tr>
+                                        <td>${r.empId}</td>
+                                        <td>${r.empName}</td>
+                                        <td class="text-end number-display">${formatNumber(r.totalHours, 1)}h</td>
+                                        <td class="text-end fw-bold money-display">${formatMoney(r.netSalary, true)}</td>
+                                    </tr>`
+                                ).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                ` : ''}
+                
+                ${errorCount > 0 ? `
+                <div class="alert alert-warning">
+                    <h6>Một số lỗi xảy ra:</h6>
+                    ${results.filter(r => r.status === 'error').map(r => 
+                        `<div>- ${r.empName} (${r.empId}): ${r.message}</div>`
+                    ).join('')}
+                </div>
+                ` : ''}
+            </div>
+        `;
+        
+        Swal.fire({
+            icon: 'success',
+            title: 'Tính lương hoàn thành',
+            html: resultHtml,
+            width: '700px',
+            confirmButtonText: 'Đóng',
+            confirmButtonColor: '#2E7D32'
+        });
+        
+    } catch (error) {
+        showLoading(false);
+        console.error('Lỗi tính lương:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Lỗi tính lương',
+            text: error.message || 'Có lỗi xảy ra khi tính lương tháng',
+            confirmButtonColor: '#dc3545'
+        });
+    }
+}
+
+// --- TÍNH LƯƠNG CÁ NHÂN BẤT KỲ LÚC NÀO ---
+window.openIndividualPayrollCalc = function(empId = '') {
+    var userData = GLOBAL_DATA['User'] || [];
+    var activeUsers = userData.filter(u => 
+        u['Delete'] !== 'X' && 
+        (u['Tinh luong'] !== 'Không' && u['Tinh luong'] !== 'No')
+    );
+    
+    var userOptions = '<option value="">-- Chọn nhân viên --</option>';
+    activeUsers.forEach(u => {
+        var selected = u['ID'] === empId ? 'selected' : '';
+        userOptions += `<option value="${u['ID']}" ${selected}>${u['ID']} - ${u['Họ và tên'] || u['HoTen'] || u['ID']}</option>`;
+    });
+    
+    var currentDate = new Date();
+    var currentMonth = currentDate.getMonth() + 1;
+    var currentYear = currentDate.getFullYear();
+    
+    var html = `
+        <div style="text-align: left;">
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label fw-bold">Nhân viên:</label>
+                    <select id="individual-emp" class="form-select" required>
+                        ${userOptions}
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label fw-bold">Tháng:</label>
+                    <select id="individual-month" class="form-select">
+                        ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m =>
+                            `<option value="${m}" ${m === currentMonth ? 'selected' : ''}>Tháng ${m}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label fw-bold">Năm:</label>
+                    <select id="individual-year" class="form-select">
+                        ${[2024, 2025, 2026, 2027].map(y =>
+                            `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    Swal.fire({
+        title: '<i class="fas fa-calculator me-2"></i>Tính lương cá nhân',
+        html: html,
+        width: '500px',
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-check me-1"></i> Tính lương',
+        cancelButtonText: 'Hủy',
+        confirmButtonColor: '#2E7D32',
+        preConfirm: () => {
+            var empId = document.getElementById('individual-emp').value;
+            var month = document.getElementById('individual-month').value;
+            var year = document.getElementById('individual-year').value;
+            
+            if (!empId) {
+                Swal.showValidationMessage('Vui lòng chọn nhân viên');
+                return false;
+            }
+            
+            return { empId, month, year };
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            processIndividualPayroll(result.value);
+        }
+    });
+}
+
+// --- XỬ LÝ TÍNH LƯƠNG CÁ NHÂN ---
+async function processIndividualPayroll(params) {
+    showLoading(true, 'Đang tính lương cá nhân...');
+    
+    try {
+        // Logic tương tự processMonthlyPayroll nhưng chỉ cho 1 người
+        var userData = GLOBAL_DATA['User'] || [];
+        var attendanceData = GLOBAL_DATA['Chamcong'] || [];
+        var salarySettingData = GLOBAL_DATA['LichSuLuong'] || [];
+        var transactionData = GLOBAL_DATA['GiaoDichLuong'] || [];
+        
+        var user = userData.find(u => u['ID'] === params.empId);
+        if (!user) throw new Error('Không tìm thấy nhân viên');
+        
+        var empName = user['Họ và tên'] || user['HoTen'] || params.empId;
+        
+        // Tính toán giống processMonthlyPayroll
+        var monthlyAttendance = attendanceData.filter(a => {
+            if (a['Delete'] === 'X' || a['ID_NhanVien'] !== params.empId) return false;
+            
+            var dateStr = a['Ngày'] || a['Ngay'];
+            if (!dateStr) return false;
+            
+            var date = new Date(dateStr);
+            return date.getMonth() + 1 === parseInt(params.month) && 
+                   date.getFullYear() === parseInt(params.year);
+        });
+        
+        var totalHours = monthlyAttendance.reduce((sum, a) => sum + (parseFloat(a['SoGioCong']) || 0), 0);
+        var totalOvertime = monthlyAttendance.reduce((sum, a) => sum + (parseFloat(a['SoGioTangCa']) || 0), 0);
+        
+        var salarySetting = salarySettingData.find(s => s['ID_NhanVien'] === params.empId);
+        var basicSalaryPerDay = parseFloat(salarySetting?.['LuongCoBan_Ngay']) || 45000;
+        var overtimeRate = parseFloat(salarySetting?.['HeSoTangCa']) || 1.5;
+        
+        var basicSalary = totalHours * basicSalaryPerDay;
+        var overtimePay = totalOvertime * basicSalaryPerDay * overtimeRate;
+        var totalIncome = basicSalary + overtimePay;
+        
+        showLoading(false);
+        
+        // Hiển thị kết quả tính lương
+        var resultHtml = `
+            <div style="text-align: left;">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0"><i class="fas fa-calculator me-2"></i>${empName} - Tháng ${params.month}/${params.year}</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2">
+                            <div class="col-6"><strong>Tổng giờ công:</strong></div>
+                            <div class="col-6 text-end">${totalHours.toFixed(1)} giờ</div>
+                            
+                            <div class="col-6"><strong>Tổng giờ tăng ca:</strong></div>
+                            <div class="col-6 text-end">${totalOvertime.toFixed(1)} giờ</div>
+                            
+                            <div class="col-6"><strong>Lương CB/ngày:</strong></div>
+                            <div class="col-6 text-end money-display">${formatMoney(basicSalaryPerDay, true)}</div>
+                            
+                            <div class="col-6"><strong>Hệ số tăng ca:</strong></div>
+                            <div class="col-6 text-end number-display">x${formatNumber(overtimeRate, 1)}</div>
+                            
+                            <hr class="my-2">
+                            
+                            <div class="col-6"><strong>Lương cơ bản:</strong></div>
+                            <div class="col-6 text-end text-success fw-bold money-display">${formatMoney(basicSalary, true)}</div>
+                            
+                            <div class="col-6"><strong>Tiền tăng ca:</strong></div>
+                            <div class="col-6 text-end text-info fw-bold money-display">${formatMoney(overtimePay, true)}</div>
+                            
+                            <hr class="my-2">
+                            
+                            <div class="col-6"><strong style="font-size: 16px;">TỔNG LƯƠNG:</strong></div>
+                            <div class="col-6 text-end fw-bold text-primary money-display" style="font-size: 18px;">${formatMoney(totalIncome, true)}</div>
+                        </div>
+                        
+                        <div class="mt-3 text-center">
+                            <button class="btn btn-success btn-sm me-2" onclick="Swal.close(); setTimeout(() => saveIndividualPayroll(${JSON.stringify(params).replace(/"/g, '&quot;')}, ${totalIncome}), 200);">
+                                <i class="fas fa-save me-1"></i> Lưu vào bảng lương
+                            </button>
+                            <button class="btn btn-outline-primary btn-sm" onclick="Swal.close(); setTimeout(() => openIndividualPayrollCalc('${params.empId}'), 200);">
+                                <i class="fas fa-redo me-1"></i> Tính lại
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        Swal.fire({
+            title: 'Kết quả tính lương',
+            html: resultHtml,
+            width: '500px',
+            showConfirmButton: false,
+            showCloseButton: true
+        });
+        
+    } catch (error) {
+        showLoading(false);
+        console.error('Lỗi tính lương cá nhân:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Lỗi tính lương',
+            text: error.message || 'Có lỗi xảy ra khi tính lương',
+            confirmButtonColor: '#dc3545'
+        });
+    }
+}
+
+// --- LƯU LƯƠNG CÁ NHÂN ---
+window.saveIndividualPayroll = async function(params, totalIncome) {
+    try {
+        showLoading(true, 'Đang lưu lương...');
+        
+        var userData = GLOBAL_DATA['User'] || [];
+        var user = userData.find(u => u['ID'] === params.empId);
+        var empName = user?.['Họ và tên'] || user?.['HoTen'] || params.empId;
+        
+        var payrollRecord = {
+            'ID_BangLuong': `${params.empId}-${params.year}${params.month.padStart(2, '0')}`,
+            'ID_NhanVien': params.empId,
+            'HoTen': empName,
+            'Thang': parseInt(params.month),
+            'Nam': parseInt(params.year),
+            'NgayTinhLuong': new Date().toISOString().split('T')[0],
+            'ThucLinh': totalIncome
+        };
+        
+        var result = await callSupabase('insert', 'BangLuongThang', payrollRecord);
+        
+        if (result.status === 'success') {
+            await refreshSingleSheet('BangLuongThang');
+            showLoading(false);
+            
+            Swal.fire({
+                icon: 'success',
+                title: 'Đã lưu lương!',
+                text: `Lương của ${empName} đã được lưu vào bảng lương tháng ${params.month}/${params.year}`,
+                confirmButtonColor: '#28a745'
+            });
+        } else {
+            throw new Error(result.message);
+        }
+        
+    } catch (error) {
+        showLoading(false);
+        Swal.fire({
+            icon: 'error',
+            title: 'Lỗi lưu lương',
+            text: error.message || 'Không thể lưu lương',
+            confirmButtonColor: '#dc3545'
+        });
+    }
+}
+
+// --- XEM LỊCH SỬ LƯƠNG ---
+window.viewPayrollHistory = function(empId) {
+    var payrollData = GLOBAL_DATA['BangLuongThang'] || [];
+    var userData = GLOBAL_DATA['User'] || [];
+    
+    var user = userData.find(u => u['ID'] === empId);
+    var empName = user?.['Họ và tên'] || user?.['HoTen'] || empId;
+    
+    var history = payrollData
+        .filter(p => p['ID_NhanVien'] === empId && p['Delete'] !== 'X')
+        .sort((a, b) => {
+            var dateA = new Date(parseInt(a['Nam']), parseInt(a['Thang']) - 1);
+            var dateB = new Date(parseInt(b['Nam']), parseInt(b['Thang']) - 1);
+            return dateB - dateA; // Sắp xếp giảm dần (mới nhất trước)
+        });
+    
+    var historyHtml = '';
+    if (history.length > 0) {
+        historyHtml = `
+            <div style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-sm table-striped">
+                    <thead class="table-primary sticky-top">
+                        <tr>
+                            <th>Tháng/Năm</th>
+                            <th class="text-end">Giờ công</th>
+                            <th class="text-end">Giờ TC</th>
+                            <th class="text-end">Thực lĩnh</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${history.map(h => `
+                            <tr style="cursor: pointer;" onclick="showPayrollDetail(${JSON.stringify(h).replace(/"/g, '&quot;')}, ${h['Thang']}, ${h['Nam']})">
+                                <td>${h['Thang'] || h['Tháng']}/${h['Nam'] || h['Năm']}</td>
+                                <td class="text-end number-display">${formatNumber(parseFloat(h['TongGioCong']) || 0, 1)}</td>
+                                <td class="text-end number-display">${formatNumber(parseFloat(h['TongGioTangCa']) || 0, 1)}</td>
+                                <td class="text-end fw-bold money-display">${formatMoney(parseFloat(h['ThucLinh']) || 0)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } else {
+        historyHtml = '<div class="text-center text-muted py-4">Chưa có lịch sử lương</div>';
+    }
+    
+    Swal.fire({
+        title: `<i class="fas fa-history me-2"></i>Lịch sử lương - ${empName}`,
+        html: historyHtml,
+        width: '600px',
+        showCloseButton: true,
+        showConfirmButton: false
     });
 }
 
@@ -1786,11 +3172,16 @@ window.exportAttendanceToExcel = function() {
 function renderTable(data) {
     data = Array.isArray(data) ? data : [];
 
-    // Kiểm tra nếu là bảng chấm công thì dùng render đặc biệt
-    if (CURRENT_SHEET === 'Chamcong') {
-        renderAttendanceTable(data);
-        return;
-    }
+        // Kiểm tra các bảng có render đặc biệt
+        if (CURRENT_SHEET === 'Chamcong') {
+            renderAttendanceTable(data);
+            return;
+        }
+        
+        if (CURRENT_SHEET === 'BangLuongThang') {
+            renderPayrollTable(data);
+            return;
+        }
 
     // Xóa class attendance-table nếu không phải bảng chấm công
     var table = document.getElementById('data-table');
@@ -1952,8 +3343,25 @@ function renderTable(data) {
                 if (!FIELD_CONSTRAINTS[k] && (k.toUpperCase().includes('NGAY') || k.toUpperCase().includes('DATE'))) v = formatSafeDate(v);
                 if (isImageColumnKey(k) && typeof v === 'string' && v.trim() && (v.startsWith('http://') || v.startsWith('https://'))) {
                     td.innerHTML = '<img src="' + String(v).replace(/"/g, '&quot;') + '" class="table-cell-img" alt="" style="max-height:36px;max-width:48px;object-fit:cover;border-radius:4px;">';
-                } else if (isMoneyField(k) && !isNaN(v) && v !== '' && v != null) {
-                    v = Number(v).toLocaleString('vi-VN'); td.className = 'text-end fw-bold text-success'; td.innerText = v;
+                } else if (isMoneyField(k) && !isNaN(v) && v !== '' && v != null && Number(v) !== 0) {
+                    // Sử dụng hàm formatMoney mới với phân tách hàng ngàn
+                    td.innerHTML = formatMoney(v);
+                    td.className = 'text-end fw-bold money-cell';
+                    // Phân biệt màu theo loại tiền
+                    if (k.toLowerCase().includes('thu') || k.toLowerCase().includes('lương') || k.toLowerCase().includes('phụ cấp') || k.toLowerCase().includes('thưởng')) {
+                        td.style.color = '#28a745'; // Xanh cho thu nhập
+                    } else if (k.toLowerCase().includes('trừ') || k.toLowerCase().includes('tạm ứng') || k.toLowerCase().includes('bảo hiểm') || k.toLowerCase().includes('nợ')) {
+                        td.style.color = '#dc3545'; // Đỏ cho khoản trừ
+                    } else if (k.toLowerCase().includes('thực lĩnh') || k.toLowerCase().includes('net')) {
+                        td.style.color = '#6f42c1'; // Tím cho thực lĩnh
+                    } else {
+                        td.style.color = '#28a745'; // Mặc định xanh
+                    }
+                } else if (isNumericField(k) && !isNaN(v) && v !== '' && v != null) {
+                    // Định dạng số thông thường (không phải tiền)
+                    td.innerHTML = formatNumber(v, 1);
+                    td.className = 'text-end fw-bold number-cell';
+                    td.style.color = '#495057';
                 } else {
                     td.innerText = v || '';
                 }
@@ -1995,6 +3403,13 @@ function isImageColumnKey(key) {
 /** Lọc tức thì (không debounce): renderTable đọc main-search trong filter-bar */
 window.applyFilterInstant = function () {
     renderTable(GLOBAL_DATA[CURRENT_SHEET] || []);
+}
+
+/** Lọc cho bảng lương */
+window.applyPayrollFilter = function () {
+    if (CURRENT_SHEET === 'BangLuongThang') {
+        renderPayrollTable(GLOBAL_DATA[CURRENT_SHEET] || []);
+    }
 }
 
 function showLoading(s, text) {
@@ -2358,8 +3773,10 @@ function showRowDetail(r, s, idx) {
                 } else {
                     displayVal = `<a href="${val.replace(/"/g, '&quot;')}" target="_blank" class="btn btn-xs btn-outline-primary py-0 px-2 mt-1" style="font-size:10px">Mở tài liệu <i class="fas fa-external-link-alt ms-1"></i></a>`;
                 }
-            } else if (isMoneyField(k) && !isNaN(resolvedVal) && resolvedVal !== '' && resolvedVal != null) {
-                displayVal = `<span class="text-success fw-bold text-end">${Number(resolvedVal).toLocaleString('vi-VN')}</span>`;
+            } else if (isMoneyField(k) && !isNaN(resolvedVal) && resolvedVal !== '' && resolvedVal != null && Number(resolvedVal) !== 0) {
+                displayVal = `<span class="text-success fw-bold text-end money-display">${formatMoney(resolvedVal)}</span>`;
+            } else if (isNumericField(k) && !isNaN(resolvedVal) && resolvedVal !== '' && resolvedVal != null) {
+                displayVal = `<span class="text-info fw-bold text-end number-display">${formatNumber(resolvedVal, 1)}</span>`;
             }
 
             var isNumField = isMoneyField(k) && !isNaN(resolvedVal) && resolvedVal !== '';
@@ -2411,15 +3828,20 @@ function showRowDetail(r, s, idx) {
                         // Apply FK mapping to child table cells
                         cv = resolveForeignKey(x, cv);
 
-                        var isNumCol = isMoneyField(x);
-                        var tdClass = isNumCol ? ' text-end' : ' text-start';
+                        var isMoneyCol = isMoneyField(x);
+                        var isNumCol = isNumericField(x);
+                        var tdClass = (isMoneyCol || isNumCol) ? ' text-end' : ' text-start';
+                        
                         if (isImageColumnKey(x) && typeof cv === 'string' && cv.trim() && (cv.startsWith('http') || cv.startsWith('https'))) {
                             cv = `<img src="${String(cv).replace(/"/g, '&quot;')}" class="table-cell-img" alt="" style="max-height:28px;max-width:36px;object-fit:cover;border-radius:4px;">`;
                         } else if (typeof cv === 'string' && (cv.startsWith('http') || cv.startsWith('https'))) {
                             cv = `<a href="${cv.replace(/"/g, '&quot;')}" target="_blank" class="text-primary" onclick="event.stopPropagation()"><i class="fas fa-paperclip"></i></a>`;
+                        } else if (isMoneyCol && cv !== '' && cv != null && !isNaN(cv) && Number(cv) !== 0) {
+                            cv = `<span class="money-cell-inline">${formatMoney(cv)}</span>`;
                         } else if (isNumCol && cv !== '' && cv != null && !isNaN(cv)) {
-                            cv = '<b>' + Number(cv).toLocaleString('vi-VN') + '</b>';
+                            cv = `<span class="number-cell-inline">${formatNumber(cv, 1)}</span>`;
                         }
+                        
                         html += '<td class="' + tdClass.trim() + '">' + cv + '</td>';
                     }
                 });
@@ -2953,10 +4375,10 @@ async function submitQuickExpense(params) {
                 + '<p>Phiếu: <b>' + parentId + '</b></p>'
                 + '<p>Loại: <b>' + params.loai + '</b>' + (params.noidung ? ' — ' + params.noidung : '') + '</p>'
                 + (params.vattuTen ? '<p>Vật tư: <b>' + params.vattuTen + '</b></p>' : '')
-                + (params.soluong ? '<p>SL: ' + params.soluong + (params.dvt ? ' ' + params.dvt : '') + (params.dongia ? ' × ' + Number(params.dongia).toLocaleString('vi-VN') + 'đ' : '') + '</p>' : '')
-                + '<p>Thành tiền: <span class="text-success fw-bold">' + params.sotien.toLocaleString('vi-VN') + ' đ</span></p>'
+                + (params.soluong ? '<p>SL: ' + formatNumber(params.soluong, 1) + (params.dvt ? ' ' + params.dvt : '') + (params.dongia ? ' × ' + formatMoney(params.dongia, true) : '') + '</p>' : '')
+                + '<p>Thành tiền: <span class="text-success fw-bold money-display">' + formatMoney(params.sotien, true) + '</span></p>'
                 + (isMuaVatLieu && params.vattu && params.kho ? '<div class="alert alert-success py-1 px-2 mt-2" style="font-size:11px;"><i class="fas fa-warehouse me-1"></i><strong>Đã tự động tạo phiếu nhập kho!</strong><br>Vật tư đã được nhập vào kho ' + params.kho + '</div>' : '')
-                + '<hr class="my-2"><p>Tổng phiếu ngày này: <span class="text-danger fw-bold fs-5">' + tongTien.toLocaleString('vi-VN') + ' đ</span></p>'
+                + '<hr class="my-2"><p>Tổng phiếu ngày này: <span class="text-danger fw-bold fs-5 money-display">' + formatMoney(tongTien, true) + '</span></p>'
                 + '</div>',
             confirmButtonText: '<i class="fas fa-plus me-1"></i> Nhập tiếp',
             showCancelButton: true,
