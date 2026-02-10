@@ -1631,10 +1631,11 @@ window.exportPayrollToExcel = function() {
                 wsData.push(['CÔNG TY CON ĐƯỜNG XANH (CDX)']);
                 wsData.push([]);
                 
-                // Header chi tiết với nhiều cột
+                // Header chi tiết với nhiều cột (đã thêm "Lương cơ bản")
                 wsData.push([
                     'STT', 'Mã nhân viên', 'Họ và tên', 'Bộ phận', 'Chức vụ', 'Tháng', 'Năm',
-                    'Số ngày làm', 'Số giờ làm', 'Số giờ tăng ca', 'Hệ số lương CB', 'Hệ số tăng ca',
+                    'Lương cơ bản (VNĐ/ngày)', 'Số ngày làm', 'Số giờ làm', 'Số giờ tăng ca', 
+                    'Hệ số lương CB', 'Hệ số tăng ca',
                     'Tiền lương chính', 'Tiền lương tăng ca', 'Phụ cấp', 'Thưởng', 'Khác',
                     'TỔNG THU', 'Tạm ứng', 'Bảo hiểm', 'Nợ tháng trước', 'Giảm trừ khác', 'TỔNG GIẢM TRỪ',
                     'THỰC LĨNH', 'Ghi chú'
@@ -1725,7 +1726,7 @@ window.exportPayrollToExcel = function() {
                     totalStats.totalGrandDeductions += totalGrandDeductions;
                     totalStats.totalNetSalary += netSalary;
                     
-                    // Thêm dòng dữ liệu chi tiết
+                    // Thêm dòng dữ liệu chi tiết (đã bổ sung Lương cơ bản)
                     wsData.push([
                         index + 1,
                         empId,
@@ -1734,6 +1735,7 @@ window.exportPayrollToExcel = function() {
                         position,
                         record['Thang'] || record['Tháng'] || '',
                         record['Nam'] || record['Năm'] || '',
+                        basicSalaryPerDay, // Lương cơ bản (VNĐ/ngày) - CỘT MỚI
                         workingDays, // Số ngày làm thực tế
                         totalHours, // Số giờ làm
                         totalOvertime, // Số giờ tăng ca
@@ -1764,6 +1766,7 @@ window.exportPayrollToExcel = function() {
                 
                 wsData.push([
                     '', 'TỔNG CỘNG', totalStats.employees + ' nhân viên', '', '', '', '',
+                    '', // Lương cơ bản (để trống cho dòng tổng)
                     totalStats.totalDays, // Tổng ngày làm
                     totalStats.totalHours, // Tổng giờ làm
                     totalStats.totalOvertime, // Tổng giờ TC
@@ -1786,13 +1789,13 @@ window.exportPayrollToExcel = function() {
                 // Tạo worksheet
                 var ws = XLSX.utils.aoa_to_sheet(wsData);
 
-                // Merge tiêu đề
+                // Merge tiêu đề (bây giờ có 26 cột)
                 ws['!merges'] = [
-                    { s: { r: 0, c: 0 }, e: { r: 0, c: 24 } }, // Merge tiêu đề dòng 1
-                    { s: { r: 1, c: 0 }, e: { r: 1, c: 24 } }  // Merge tiêu đề dòng 2
+                    { s: { r: 0, c: 0 }, e: { r: 0, c: 25 } }, // Merge tiêu đề dòng 1
+                    { s: { r: 1, c: 0 }, e: { r: 1, c: 25 } }  // Merge tiêu đề dòng 2
                 ];
 
-                // Set column widths tối ưu
+                // Set column widths tối ưu (đã thêm cột Lương cơ bản)
                 ws['!cols'] = [
                     { wch: 5 },  // STT
                     { wch: 12 }, // Mã NV
@@ -1801,6 +1804,7 @@ window.exportPayrollToExcel = function() {
                     { wch: 15 }, // Chức vụ
                     { wch: 6 },  // Tháng
                     { wch: 6 },  // Năm
+                    { wch: 14 }, // Lương cơ bản (VNĐ/ngày) - CỘT MỚI
                     { wch: 10 }, // Số ngày làm
                     { wch: 10 }, // Số giờ làm
                     { wch: 12 }, // Số giờ tăng ca
@@ -1850,23 +1854,23 @@ window.exportPayrollToExcel = function() {
                         else if (R === 3) {
                             cell.s.font = { bold: true, size: 9, color: { rgb: "FFFFFF" } };
                             cell.s.fill = { fgColor: { rgb: "4CAF50" } };
-                            // Căn phải cho cột số liệu
-                            if (C >= 7 && C <= 23) {
+                            // Căn phải cho cột số liệu (đã điều chỉnh do thêm cột Lương CB)
+                            if (C >= 7 && C <= 24) {
                                 cell.s.alignment.horizontal = "right";
                             }
                         }
-                        // Dòng tổng cộng
+                        // Dòng tổng cộng (điều chỉnh range do thêm cột)
                         else if (R === range.e.r) {
                             cell.s.font = { bold: true, size: 10, color: { rgb: "FFFFFF" } };
                             cell.s.fill = { fgColor: { rgb: "FF9800" } }; // Cam
-                            if (C >= 7 && C <= 23) {
+                            if (C >= 7 && C <= 24) {
                                 cell.s.alignment.horizontal = "right";
                             }
                         }
-                        // Dữ liệu thông thường
+                        // Dữ liệu thông thường (điều chỉnh index do thêm cột Lương CB)
                         else if (R >= 4 && R < range.e.r) {
                             // Căn phải cho cột số
-                            if (C >= 7 && C <= 23) {
+                            if (C >= 7 && C <= 24) {
                                 cell.s.alignment.horizontal = "right";
                             }
                             // Căn trái cho text
@@ -1874,32 +1878,57 @@ window.exportPayrollToExcel = function() {
                                 cell.s.alignment.horizontal = "left";
                             }
                             
-                            // Định dạng số với phân tách hàng ngàn
-                            if ((C >= 12 && C <= 17) || (C >= 18 && C <= 23)) {
+                            // Định dạng Lương cơ bản (cột 7)
+                            if (C === 7) {
+                                if (typeof cell.v === 'number' && cell.v !== 0) {
+                                    cell.z = '#,##0'; // Phân tách hàng ngàn
+                                    cell.s.font.color = { rgb: "1976D2" }; // Xanh dương
+                                    cell.s.font.bold = true;
+                                    cell.s.fill = { fgColor: { rgb: "E3F2FD" } }; // Nền xanh nhạt
+                                }
+                            }
+                            // Định dạng số ngày làm (cột 8)
+                            else if (C === 8) {
+                                if (typeof cell.v === 'number') {
+                                    cell.z = '0'; // Số nguyên
+                                }
+                            }
+                            // Định dạng giờ làm và giờ TC (cột 9, 10)
+                            else if (C === 9 || C === 10) {
+                                if (typeof cell.v === 'number') {
+                                    cell.z = '0.0'; // 1 chữ số thập phân
+                                }
+                            }
+                            // Định dạng hệ số (cột 11, 12)
+                            else if (C === 11 || C === 12) {
+                                if (typeof cell.v === 'number') {
+                                    cell.z = '0.0';
+                                    cell.s.fill = { fgColor: { rgb: "FFF9C4" } }; // Nền vàng nhạt
+                                }
+                            }
+                            // Định dạng số tiền với phân tách hàng ngàn
+                            else if ((C >= 13 && C <= 18) || (C >= 19 && C <= 24)) {
                                 if (typeof cell.v === 'number' && cell.v !== 0) {
                                     cell.z = '#,##0';
                                     
                                     // Màu sắc phân biệt
-                                    if (C >= 12 && C <= 17) { // Thu nhập
+                                    if (C >= 13 && C <= 17) { // Thu nhập
                                         cell.s.font.color = { rgb: "2E7D32" }; // Xanh
-                                    } else if (C >= 18 && C <= 22) { // Giảm trừ
+                                    } else if (C === 18) { // TỔNG THU
+                                        cell.s.font.color = { rgb: "2E7D32" }; // Xanh
+                                        cell.s.font.bold = true;
+                                        cell.s.fill = { fgColor: { rgb: "E8F5E9" } }; // Nền xanh đậm
+                                    } else if (C >= 19 && C <= 22) { // Giảm trừ
                                         cell.s.font.color = { rgb: "D32F2F" }; // Đỏ
-                                    } else if (C === 23) { // Thực lĩnh
+                                    } else if (C === 23) { // TỔNG GIẢM TRỪ
+                                        cell.s.font.color = { rgb: "D32F2F" }; // Đỏ
+                                        cell.s.font.bold = true;
+                                        cell.s.fill = { fgColor: { rgb: "FFEBEE" } }; // Nền đỏ nhạt
+                                    } else if (C === 24) { // THỰC LĨNH
                                         cell.s.font.color = { rgb: "1976D2" }; // Xanh dương
                                         cell.s.font.bold = true;
+                                        cell.s.fill = { fgColor: { rgb: "E3F2FD" } }; // Nền xanh dương nhạt
                                     }
-                                }
-                            }
-                            // Định dạng giờ
-                            else if (C === 8 || C === 9) {
-                                if (typeof cell.v === 'number') {
-                                    cell.z = '0.0';
-                                }
-                            }
-                            // Định dạng hệ số
-                            else if (C === 10 || C === 11) {
-                                if (typeof cell.v === 'number') {
-                                    cell.z = '0.0';
                                 }
                             }
                         }
@@ -1942,7 +1971,15 @@ window.exportPayrollToExcel = function() {
                         '</div>' +
                         '</div>' +
                         '</div>' +
-                        '<p class="small text-muted mt-2">Excel có <strong>25 cột</strong> thông tin chi tiết với định dạng số và màu sắc chuyên nghiệp.</p>' +
+                        '<div class="mt-2 small">' +
+                        '<strong>📋 Thông tin chi tiết:</strong><br>' +
+                        '• 26 cột dữ liệu đầy đủ<br>' +
+                        '• Lương cơ bản cá nhân (VNĐ/ngày)<br>' +
+                        '• Số ngày, giờ làm từ chấm công thực tế<br>' +
+                        '• Hệ số lương và tăng ca theo cài đặt<br>' +
+                        '• Phân tách rõ: Thu nhập | Giảm trừ | Thực lĩnh<br>' +
+                        '• Định dạng số, màu sắc chuyên nghiệp<br>' +
+                        '</div>' +
                         '</div>',
                     confirmButtonColor: '#28a745',
                     width: '600px'
