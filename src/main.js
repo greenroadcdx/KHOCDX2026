@@ -439,6 +439,147 @@ function isNumericField(k) {
     return /so.?luong|số lượng|soluong|so_luong|gio|giờ|hour|so.?ngay|số ngày|songay|so_ngay|so.?gio|số giờ|sogio|so_gio|ty.?le|tỷ lệ|tile|ti_le|phan.?tram|phần trăm|phantram|phan_tram|he.?so|hệ số|heso|he_so/i.test(k);
 }
 
+// === XỬ LÝ CỘT TRỐNG KHÔNG CẦN THIẾT ===
+function getVisibleColumns(data, excludeColumns = []) {
+    if (!Array.isArray(data) || data.length === 0) return [];
+    
+    var sampleData = data.find(r => r && typeof r === 'object') || {};
+    var allKeys = Object.keys(sampleData);
+    
+    // Loại bỏ các cột không cần thiết
+    var defaultExcludeColumns = [
+        'Delete', 'delete', 'DELETE',
+        'created_at', 'updated_at', 'CreatedAt', 'UpdatedAt',
+        'timestamp', 'Timestamp', 'TIMESTAMP'
+    ];
+    
+    var excludeSet = new Set([...defaultExcludeColumns, ...excludeColumns]);
+    
+    return allKeys.filter(key => {
+        // Loại bỏ cột trong danh sách exclude
+        if (excludeSet.has(key)) return false;
+        
+        // Kiểm tra cột có dữ liệu hữu ích không
+        var hasData = data.some(row => {
+            var value = row[key];
+            return value !== null && value !== undefined && 
+                   value !== '' && value !== 0 && 
+                   String(value).trim() !== '';
+        });
+        
+        return hasData;
+    });
+}
+
+function getOptimalColumnWidth(data, columnKey) {
+    if (!Array.isArray(data) || data.length === 0) return 'auto';
+    
+    var maxLength = Math.max(
+        columnKey.length, // Độ dài header
+        ...data.map(row => {
+            var value = row[columnKey];
+            if (value === null || value === undefined) return 0;
+            return String(value).length;
+        })
+    );
+    
+    // Tính width dựa trên độ dài nội dung
+    var baseWidth = Math.max(60, Math.min(maxLength * 8, 200)); // Min 60px, Max 200px
+    
+    // Điều chỉnh cho các loại cột đặc biệt
+    if (isMoneyField(columnKey)) return Math.max(baseWidth, 100) + 'px';
+    if (isNumericField(columnKey)) return Math.max(baseWidth, 80) + 'px';
+    if (columnKey.toLowerCase().includes('tên') || columnKey.toLowerCase().includes('name')) return Math.max(baseWidth, 120) + 'px';
+    if (columnKey.toLowerCase().includes('mô tả') || columnKey.toLowerCase().includes('ghi chú')) return Math.max(baseWidth, 150) + 'px';
+    
+    return baseWidth + 'px';
+}
+
+// === QUẢN LÝ THANH TRƯỢT BẢNG ===
+function setupTableScrollIndicators() {
+    var tableContainers = document.querySelectorAll('.table-scroll, .table-responsive');
+    
+    tableContainers.forEach(container => {
+        var table = container.querySelector('table');
+        if (!table) return;
+        
+        // Kiểm tra xem có scroll horizontal không
+        function checkHorizontalScroll() {
+            var hasScroll = container.scrollWidth > container.clientWidth;
+            
+            // Thêm/xóa indicator
+            var indicator = container.querySelector('.scroll-indicator');
+            if (hasScroll && !indicator) {
+                indicator = document.createElement('div');
+                indicator.className = 'scroll-indicator';
+                indicator.innerHTML = '<i class="fas fa-arrows-alt-h"></i> Vuốt ngang để xem thêm';
+                indicator.style.cssText = `
+                    position: absolute;
+                    top: 50%;
+                    right: 10px;
+                    transform: translateY(-50%);
+                    background: rgba(46, 125, 50, 0.9);
+                    color: white;
+                    padding: 5px 10px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    z-index: 30;
+                    pointer-events: none;
+                    animation: fadeInOut 3s ease-in-out;
+                `;
+                container.style.position = 'relative';
+                container.appendChild(indicator);
+                
+                // Auto hide after 3 seconds
+                setTimeout(() => {
+                    if (indicator && indicator.parentNode) {
+                        indicator.remove();
+                    }
+                }, 3000);
+            } else if (!hasScroll && indicator) {
+                indicator.remove();
+            }
+        }
+        
+        // Kiểm tra khi load và khi resize
+        checkHorizontalScroll();
+        container.addEventListener('scroll', checkHorizontalScroll);
+        window.addEventListener('resize', checkHorizontalScroll);
+    });
+}
+
+// === AUTO OPTIMIZE TABLE WIDTH ===
+function optimizeTableDisplay() {
+    var table = document.getElementById('data-table');
+    if (!table) return;
+    
+    var container = table.closest('.table-scroll, .table-responsive');
+    if (!container) return;
+    
+    var headers = table.querySelectorAll('thead th');
+    var totalRequiredWidth = 0;
+    
+    headers.forEach(th => {
+        var computedStyle = window.getComputedStyle(th);
+        var width = parseInt(computedStyle.minWidth) || 100;
+        totalRequiredWidth += width;
+    });
+    
+    var containerWidth = container.clientWidth;
+    
+    // Nếu table rộng hơn container, kích hoạt horizontal scroll
+    if (totalRequiredWidth > containerWidth - 50) { // -50 để có margin
+        table.style.minWidth = totalRequiredWidth + 'px';
+        container.style.overflowX = 'auto';
+        
+        // Setup scroll indicators
+        setTimeout(setupTableScrollIndicators, 100);
+    } else {
+        table.style.minWidth = '100%';
+        container.style.overflowX = 'visible';
+    }
+}
+
 // Ràng buộc input cho các trường đặc biệt
 const FIELD_CONSTRAINTS = {
     'HeSoTangCa': { type: 'number', min: 1.1, max: 1.9, step: 0.1, placeholder: 'Từ 1.1 đến 1.9' },
@@ -932,6 +1073,11 @@ window.switchTab = function (id, el) {
         }
     }
     if (window.innerWidth < 992 && sidebarBS) sidebarBS.hide();
+    
+    // Trigger event cho responsive table setup
+    setTimeout(() => {
+        document.dispatchEvent(new CustomEvent('tabSwitched', { detail: { tabId: id, sheet: CURRENT_SHEET } }));
+    }, 100);
 }
 
 // --- MỞ CÀI ĐẶT LƯƠNG CHO NHÂN VIÊN ---
@@ -3674,28 +3820,93 @@ function renderTable(data) {
         return;
     }
 
-    // Lấy đủ cột từ tất cả dòng (tránh thiếu cột nếu dòng đầu không đủ)
-    var keys = [];
+    // Lấy các cột có dữ liệu hữu ích (loại bỏ cột trống và không cần thiết)
+    var allKeys = [];
     activeData.forEach(function (r) {
         Object.keys(r).forEach(function (k) {
-            if (!skip.includes(k) && keys.indexOf(k) === -1) keys.push(k);
+            if (!skip.includes(k) && allKeys.indexOf(k) === -1) allKeys.push(k);
         });
     });
+    
+    // Lọc ra các cột có dữ liệu thật sự
+    var keys = allKeys.filter(function(key) {
+        // Loại bỏ các cột hệ thống không cần thiết
+        if (['Delete', 'delete', 'DELETE', 'created_at', 'updated_at', 'CreatedAt', 'UpdatedAt'].includes(key)) {
+            return false;
+        }
+        
+        // Kiểm tra cột có dữ liệu hữu ích không
+        var hasUsefulData = activeData.some(function(row) {
+            var value = row[key];
+            return value !== null && value !== undefined && 
+                   value !== '' && value !== 0 && 
+                   String(value).trim() !== '' &&
+                   String(value).toLowerCase() !== 'null' &&
+                   String(value).toLowerCase() !== 'undefined';
+        });
+        
+        return hasUsefulData;
+    });
+    
     if (keys.length === 0) keys = Object.keys(activeData[0] || {}).filter(function (k) { return !skip.includes(k); });
 
+    // Tạo header với width tối ưu và thanh trượt ngang
     var trH = document.createElement('tr');
-    keys.forEach(k => { var t = document.createElement('th'); t.innerText = COLUMN_MAP[k] || k; trH.appendChild(t); });
-    trH.appendChild(document.createElement('th'));
+    
+    keys.forEach(k => { 
+        var t = document.createElement('th'); 
+        t.innerText = COLUMN_MAP[k] || k;
+        t.className = 'sticky-header';
+        
+        // Set width tối ưu cho từng cột
+        var optimalWidth = getOptimalColumnWidth(activeData, k);
+        t.style.minWidth = optimalWidth;
+        t.style.maxWidth = k.toLowerCase().includes('mô tả') || k.toLowerCase().includes('ghi chú') ? '300px' : '250px';
+        
+        // Căn lề cho header
+        if (isMoneyField(k) || isNumericField(k)) {
+            t.className += ' text-end';
+        } else {
+            t.className += ' text-center';
+        }
+        
+        trH.appendChild(t); 
+    });
+    
+    // Thêm cột thao tác
+    var actionTh = document.createElement('th');
+    actionTh.innerText = 'Thao tác';
+    actionTh.className = 'sticky-header text-center';
+    actionTh.style.minWidth = '100px';
+    actionTh.style.width = '100px';
+    actionTh.style.position = 'sticky';
+    actionTh.style.right = '0';
+    actionTh.style.backgroundColor = 'var(--primary-color)';
+    actionTh.style.zIndex = '25';
+    trH.appendChild(actionTh);
+    
     th.appendChild(trH);
+    
+    // Đảm bảo table có class để kích hoạt horizontal scroll
+    var table = document.getElementById('data-table');
+    if (table) {
+        table.classList.add('table-with-horizontal-scroll');
+        // Tính toán tổng width để đảm bảo có scroll
+        var totalWidth = keys.length * 100 + 100; // Ước tính
+        if (totalWidth > 800) {
+            table.style.minWidth = totalWidth + 'px';
+        }
+    }
 
     activeData.forEach((r) => {
         var absoluteIdx = data.indexOf(r);
         var tr = document.createElement('tr');
         tr.style.cursor = 'pointer';
+        tr.className = 'table-row-with-scroll';
+        
         keys.forEach(k => {
-            if (!skip.includes(k)) {
-                var td = document.createElement('td');
-                var v = r[k];
+            var td = document.createElement('td');
+            var v = r[k];
 
                 // Resolve foreign key trước tiên
                 v = resolveForeignKey(k, v);
@@ -3729,22 +3940,155 @@ function renderTable(data) {
             }
         });
 
-        var tdA = document.createElement('td'); tdA.className = 'text-center sticky-col';
-        var btnGroup = document.createElement('div'); btnGroup.className = 'btn-group';
+        // Cột thao tác với sticky positioning
+        var tdA = document.createElement('td'); 
+        tdA.className = 'text-center action-column-sticky';
+        tdA.style.position = 'sticky';
+        tdA.style.right = '0';
+        tdA.style.backgroundColor = '#f8f9fa';
+        tdA.style.borderLeft = '2px solid var(--primary-color)';
+        tdA.style.zIndex = '20';
+        tdA.style.minWidth = '100px';
+        tdA.style.width = '100px';
+        
+        var btnGroup = document.createElement('div'); 
+        btnGroup.className = 'btn-group';
 
-        var btnEdit = document.createElement('button'); btnEdit.className = 'btn btn-sm btn-light border text-success shadow-sm'; btnEdit.innerHTML = '<i class="fas fa-pen"></i>'; btnEdit.title = 'Sửa';
+        var btnEdit = document.createElement('button'); 
+        btnEdit.className = 'btn btn-xs btn-outline-success'; 
+        btnEdit.innerHTML = '<i class="fas fa-pen"></i>'; 
+        btnEdit.title = 'Sửa';
         btnEdit.onclick = (e) => { e.stopPropagation(); openEditModal(absoluteIdx); };
 
-        var btnDel = document.createElement('button'); btnDel.className = 'btn btn-sm btn-light border text-danger shadow-sm'; btnDel.innerHTML = '<i class="fas fa-trash-alt"></i>'; btnDel.title = 'Xóa';
+        var btnDel = document.createElement('button'); 
+        btnDel.className = 'btn btn-xs btn-outline-danger'; 
+        btnDel.innerHTML = '<i class="fas fa-trash-alt"></i>'; 
+        btnDel.title = 'Xóa';
         btnDel.onclick = (e) => { e.stopPropagation(); deleteRow(absoluteIdx); };
 
-        btnGroup.appendChild(btnEdit); btnGroup.appendChild(btnDel);
-        tdA.appendChild(btnGroup); tr.appendChild(tdA);
+        btnGroup.appendChild(btnEdit); 
+        btnGroup.appendChild(btnDel);
+        tdA.appendChild(btnGroup); 
+        tr.appendChild(tdA);
 
         tr.onclick = () => showRowDetail(r, CURRENT_SHEET, absoluteIdx);
         tb.appendChild(tr);
     });
+    
+    // Tối ưu hóa hiển thị bảng và setup scroll indicators
+    setTimeout(() => {
+        optimizeTableDisplay();
+        setupTableScrollIndicators();
+        
+        // Thêm compact class nếu có quá nhiều cột
+        var table = document.getElementById('data-table');
+        if (table && keys.length > 10) {
+            table.classList.add('compact');
+        }
+        
+        // Kiểm tra và thêm shadow indicator
+        var container = table?.closest('.table-scroll, .table-responsive');
+        if (container && container.scrollWidth > container.clientWidth) {
+            container.classList.add('has-horizontal-scroll');
+        }
+    }, 50);
 }
+
+// === RESPONSIVE TABLE MANAGEMENT ===
+function setupResponsiveTableBehavior() {
+    var table = document.getElementById('data-table');
+    if (!table) return;
+    
+    var container = table.closest('.table-scroll, .table-responsive');
+    if (!container) return;
+    
+    // Theo dõi scroll để hiện/ẩn action column
+    container.addEventListener('scroll', function() {
+        var isScrolledToRight = (container.scrollLeft + container.clientWidth) >= container.scrollWidth - 10;
+        var actionColumns = table.querySelectorAll('.action-column-sticky');
+        
+        actionColumns.forEach(col => {
+            if (isScrolledToRight) {
+                col.style.borderLeft = '2px solid #28a745';
+                col.style.backgroundColor = '#f0f8f0';
+            } else {
+                col.style.borderLeft = '2px solid var(--primary-color)';
+                col.style.backgroundColor = '#f8f9fa';
+            }
+        });
+    });
+    
+    // Double tap để fit table
+    var lastTap = 0;
+    table.addEventListener('touchend', function(e) {
+        var currentTime = new Date().getTime();
+        var tapLength = currentTime - lastTap;
+        if (tapLength < 500 && tapLength > 0) {
+            // Double tap detected
+            toggleTableFitMode(table, container);
+            e.preventDefault();
+        }
+        lastTap = currentTime;
+    });
+}
+
+function toggleTableFitMode(table, container) {
+    if (table.classList.contains('fit-mode')) {
+        // Trở về chế độ bình thường
+        table.classList.remove('fit-mode');
+        table.style.minWidth = '';
+        optimizeTableDisplay();
+        
+        // Toast notification
+        if (typeof Swal !== 'undefined') {
+            const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1000 });
+            Toast.fire({ icon: 'info', title: 'Chế độ bình thường' });
+        }
+    } else {
+        // Chế độ fit toàn màn hình
+        table.classList.add('fit-mode');
+        table.style.minWidth = container.clientWidth + 'px';
+        
+        // Điều chỉnh width cột cho vừa màn hình
+        var headers = table.querySelectorAll('th:not(.action-column-sticky)');
+        var availableWidth = container.clientWidth - 100; // Trừ action column
+        var avgWidth = Math.floor(availableWidth / headers.length);
+        
+        headers.forEach(th => {
+            th.style.width = avgWidth + 'px';
+            th.style.maxWidth = avgWidth + 'px';
+        });
+        
+        // Toast notification
+        if (typeof Swal !== 'undefined') {
+            const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1000 });
+            Toast.fire({ icon: 'info', title: 'Chế độ vừa màn hình' });
+        }
+    }
+}
+
+// === GỌI SETUP KHI TRANG LOAD ===
+document.addEventListener('DOMContentLoaded', function() {
+    // Setup responsive behavior cho tất cả table
+    setTimeout(setupResponsiveTableBehavior, 1000);
+    
+    // Theo dõi thay đổi kích thước màn hình
+    window.addEventListener('resize', function() {
+        setTimeout(() => {
+            optimizeTableDisplay();
+            setupTableScrollIndicators();
+        }, 100);
+    });
+});
+
+// Gọi khi switch tab
+document.addEventListener('tabSwitched', function() {
+    setTimeout(() => {
+        optimizeTableDisplay();
+        setupTableScrollIndicators();
+        setupResponsiveTableBehavior();
+    }, 200);
+});
 
 function formatSafeDate(d) {
     if (!d || d === 'Invalid Date') return '';

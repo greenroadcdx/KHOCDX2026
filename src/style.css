@@ -395,25 +395,406 @@ h6,
     }
 }
 
+/* ===============================================
+   THANH TRƯỢT NGANG CHO TẤT CẢ BẢNG
+   =============================================== */
+
 /* Vùng cuộn duy nhất = table-scroll → chiếm hết phần còn lại phía dưới */
 .table-scroll {
     flex: 1 1 0;
     min-height: 120px;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-/* --- TABLE: cho phép thanh trượt ngang --- */
+/* Custom scrollbar cho table-scroll */
+.table-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 12px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+    background: #f1f3f4;
+    border-radius: 6px;
+    margin: 2px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #4CAF50 100%);
+    border-radius: 6px;
+    border: 2px solid #f1f3f4;
+    background-clip: content-box;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #1e5e23 0%, #388e3c 100%);
+}
+
+.table-scroll::-webkit-scrollbar-corner {
+    background: #f1f3f4;
+    border-radius: 6px;
+}
+
+/* --- TABLE: cho phép thanh trượt ngang với animation --- */
 .table-responsive {
     overflow-x: auto !important;
-    overflow-y: auto !important;
+    overflow-y: visible !important;
     -webkit-overflow-scrolling: touch;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    background: white;
+    transition: box-shadow 0.3s ease;
 }
+
+.table-responsive:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Custom scrollbar cho table-responsive */
+.table-responsive::-webkit-scrollbar {
+    height: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: #1e5e23;
+}
+
+/* ===============================================
+   TABLE IMPROVEMENTS - THANH TRƯỢT VÀ STICKY COLUMNS
+   =============================================== */
 
 .custom-table {
     font-size: 12px !important;
-    border-collapse: separate;
-    border-spacing: 0;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    min-width: 100% !important;
+    position: relative !important;
+}
+
+/* Table với thanh trượt ngang */
+.table-with-horizontal-scroll {
+    min-width: 1200px !important; /* Kích hoạt scroll khi cần */
+    table-layout: auto !important;
+}
+
+.table-with-horizontal-scroll th,
+.table-with-horizontal-scroll td {
+    white-space: nowrap !important;
+    padding: 8px 10px !important;
+    border-right: 1px solid #e9ecef !important;
+}
+
+/* Action column sticky */
+.action-column-sticky {
+    position: sticky !important;
+    right: 0 !important;
+    background-color: #f8f9fa !important;
+    z-index: 20 !important;
+    border-left: 2px solid var(--primary-color) !important;
+    min-width: 100px !important;
+    max-width: 100px !important;
+    box-shadow: -2px 0 4px rgba(0,0,0,0.1) !important;
+}
+
+.action-column-sticky .btn-group {
+    display: flex !important;
+    gap: 2px !important;
+    justify-content: center !important;
+}
+
+.action-column-sticky .btn-xs {
+    padding: 4px 6px !important;
+    font-size: 11px !important;
+    border-radius: 4px !important;
+    min-width: 32px !important;
+}
+
+/* Header sticky improvements */
+.sticky-header {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 25 !important;
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    font-weight: 600 !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    border-bottom: 2px solid #1e5e23 !important;
+}
+
+/* Row hover effect với scroll */
+.table-row-with-scroll:hover {
+    background-color: #fff3cd !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+    transition: all 0.2s ease !important;
+}
+
+.table-row-with-scroll:hover .action-column-sticky {
+    background-color: #fdf5e6 !important;
+    border-left-color: #28a745 !important;
+}
+
+/* ===============================================
+   SCROLL INDICATORS VÀ ANIMATIONS
+   =============================================== */
+
+/* Animation cho scroll indicator */
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(-50%) translateX(10px); }
+    15% { opacity: 1; transform: translateY(-50%) translateX(0); }
+    85% { opacity: 1; transform: translateY(-50%) translateX(0); }
+    100% { opacity: 0; transform: translateY(-50%) translateX(10px); }
+}
+
+.scroll-indicator {
+    animation: fadeInOut 3s ease-in-out !important;
+}
+
+/* Gradient shadows để chỉ báo có nội dung bên phải */
+.table-scroll::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 20px;
+    height: 100%;
+    background: linear-gradient(to left, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0) 100%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 15;
+}
+
+.table-scroll.has-horizontal-scroll::after {
+    opacity: 1;
+}
+
+/* Mobile scroll improvements */
+@media (max-width: 768px) {
+    .table-with-horizontal-scroll {
+        min-width: 800px !important;
+    }
+    
+    .action-column-sticky {
+        min-width: 80px !important;
+        max-width: 80px !important;
+    }
+    
+    .action-column-sticky .btn-xs {
+        padding: 3px 4px !important;
+        font-size: 10px !important;
+        min-width: 24px !important;
+    }
+    
+    .scroll-indicator {
+        font-size: 10px !important;
+        padding: 3px 6px !important;
+    }
+}
+
+/* Table loading state */
+.table-loading {
+    position: relative;
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.table-loading::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 30px;
+    height: 30px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    transform: translate(-50%, -50%);
+    z-index: 100;
+}
+
+@keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Optimize table cell spacing cho nhiều cột */
+.table-with-horizontal-scroll.compact {
+    font-size: 11px !important;
+}
+
+.table-with-horizontal-scroll.compact th,
+.table-with-horizontal-scroll.compact td {
+    padding: 6px 8px !important;
+    font-size: 11px !important;
+}
+
+/* Column type styling */
+.table-with-horizontal-scroll .money-cell {
+    background-color: #f8fff9 !important;
+    min-width: 90px !important;
+}
+
+.table-with-horizontal-scroll .number-cell {
+    background-color: #f8f9fa !important;
+    min-width: 70px !important;
+}
+
+.table-with-horizontal-scroll th.text-end,
+.table-with-horizontal-scroll td.text-end {
+    padding-right: 12px !important;
+}
+
+/* ===============================================
+   FIT MODE VÀ RESPONSIVE TABLE BEHAVIORS
+   =============================================== */
+
+/* Fit mode - Table vừa màn hình */
+.table-with-horizontal-scroll.fit-mode {
+    width: 100% !important;
+    table-layout: fixed !important;
+}
+
+.table-with-horizontal-scroll.fit-mode th,
+.table-with-horizontal-scroll.fit-mode td {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+.table-with-horizontal-scroll.fit-mode .action-column-sticky {
+    width: 100px !important;
+    min-width: 100px !important;
+    max-width: 100px !important;
+}
+
+/* Scroll indicator styling */
+.scroll-indicator {
+    position: absolute !important;
+    top: 50% !important;
+    right: 120px !important; /* Tránh đè lên action column */
+    transform: translateY(-50%) !important;
+    background: rgba(46, 125, 50, 0.9) !important;
+    color: white !important;
+    padding: 6px 12px !important;
+    border-radius: 20px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    z-index: 40 !important;
+    pointer-events: none !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+    backdrop-filter: blur(4px) !important;
+}
+
+/* Gradient shadow indicators */
+.table-scroll.has-horizontal-scroll::before,
+.table-responsive.has-horizontal-scroll::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 20px;
+    height: 100%;
+    background: linear-gradient(to right, rgba(46,125,50,0.1) 0%, rgba(46,125,50,0) 100%);
+    pointer-events: none;
+    z-index: 15;
+}
+
+.table-scroll.has-horizontal-scroll::after,
+.table-responsive.has-horizontal-scroll::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 120px; /* Tránh action column */
+    width: 20px;
+    height: 100%;
+    background: linear-gradient(to left, rgba(46,125,50,0.1) 0%, rgba(46,125,50,0) 100%);
+    pointer-events: none;
+    z-index: 15;
+}
+
+/* Table container positioning */
+.table-scroll,
+.table-responsive {
+    position: relative !important;
+}
+
+/* Enhanced mobile scrolling */
+@media (max-width: 768px) {
+    .table-scroll,
+    .table-responsive {
+        -webkit-overflow-scrolling: touch !important;
+        scroll-behavior: smooth !important;
+    }
+    
+    .table-with-horizontal-scroll {
+        min-width: 900px !important;
+    }
+    
+    .scroll-indicator {
+        right: 90px !important;
+        font-size: 10px !important;
+        padding: 4px 8px !important;
+    }
+    
+    .table-scroll.has-horizontal-scroll::after,
+    .table-responsive.has-horizontal-scroll::after {
+        right: 90px !important;
+        width: 15px !important;
+    }
+}
+
+/* Loading state cho table */
+.table-container-loading {
+    position: relative;
+}
+
+.table-container-loading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    z-index: 50;
+}
+
+.table-container-loading::after {
+    content: '⟳';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 30px;
+    color: var(--primary-color);
+    animation: spin 1s linear infinite;
+    z-index: 51;
+}
+
+/* Touch-friendly action buttons */
+.action-column-sticky .btn-group {
+    touch-action: manipulation !important;
+}
+
+.action-column-sticky .btn-xs:active {
+    transform: scale(0.95) !important;
+    transition: transform 0.1s ease !important;
 }
 
 /* Bảng con trong chi tiết: 1 hàng mỗi bản ghi, có thể trượt ngang */
