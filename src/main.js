@@ -1004,8 +1004,14 @@ function renderPayrollTable(data) {
                 </div>
                 <div>
                     <label class="form-label small fw-bold text-muted mb-1">&nbsp;</label>
-                    <button class="btn btn-primary btn-sm d-block" onclick="openIndividualPayrollCalc()" title="Tính lương cá nhân">
+                    <button class="btn btn-primary btn-sm d-block me-2" onclick="openIndividualPayrollCalc()" title="Tính lương cá nhân">
                         <i class="fas fa-user-check me-1"></i> Tính cá nhân
+                    </button>
+                </div>
+                <div>
+                    <label class="form-label small fw-bold text-muted mb-1">&nbsp;</label>
+                    <button class="btn btn-success btn-sm d-block" onclick="exportPayrollToExcel()" title="Xuất Excel bảng lương">
+                        <i class="fas fa-file-excel me-1"></i> Xuất Excel
                     </button>
                 </div>
             </div>
@@ -1562,6 +1568,360 @@ window.showEmployeeSalaryDetail = function(emp, month, year) {
             title: 'text-success'
         }
     });
+}
+
+// --- XUẤT EXCEL BẢNG LƯƠNG THÁNG ---
+window.exportPayrollToExcel = function() {
+    var month = document.getElementById('payroll-month-filter')?.value;
+    var year = document.getElementById('payroll-year-filter')?.value;
+    var searchText = (document.getElementById('payroll-search')?.value || '').toLowerCase().trim();
+
+    if (!month || !year) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Thiếu thông tin',
+            text: 'Vui lòng chọn tháng và năm để xuất Excel',
+            confirmButtonColor: '#ffc107'
+        });
+        return;
+    }
+
+    Swal.fire({
+        icon: 'info',
+        title: 'Xuất Excel',
+        text: `Đang chuẩn bị file Excel bảng lương tháng ${month}/${year}...`,
+        timer: 2000,
+        showConfirmButton: false
+    });
+
+    setTimeout(function() {
+        try {
+            var data = GLOBAL_DATA['BangLuongThang'] || [];
+            var userData = GLOBAL_DATA['User'] || [];
+            
+            // Lọc dữ liệu theo tháng/năm và search
+            var filteredData = data.filter(r => {
+                if (r['Delete'] === 'X') return false;
+                
+                var recordMonth = parseInt(r['Thang'] || r['Tháng']) || 0;
+                var recordYear = parseInt(r['Nam'] || r['Năm']) || 0;
+                
+                if (recordMonth !== parseInt(month) || recordYear !== parseInt(year)) return false;
+                
+                // Lọc theo search text
+                if (searchText) {
+                    var empName = (r['HoTen'] || r['Họ và tên'] || '').toLowerCase();
+                    var empId = (r['ID_NhanVien'] || r['MaNhanVien'] || '').toLowerCase();
+                    if (!empName.includes(searchText) && !empId.includes(searchText)) return false;
+                }
+                
+                return true;
+            });
+
+            if (filteredData.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Không có dữ liệu',
+                    text: 'Không có dữ liệu lương cho tháng/năm đã chọn',
+                    confirmButtonColor: '#ffc107'
+                });
+                return;
+            }
+
+            // Tạo workbook
+            var wb = XLSX.utils.book_new();
+            var wsData = [];
+            
+            // Tiêu đề bảng
+            var monthNames = ['', 'MỘT', 'HAI', 'BA', 'TƯ', 'NĂM', 'SÁU', 'BẢY', 'TÁM', 'CHÍN', 'MƯỜI', 'MƯỜI MỘT', 'MƯỜI HAI'];
+            wsData.push([`BẢNG LƯƠNG THÁNG ${monthNames[parseInt(month)] || month}/${year} - CÔNG TY CON ĐƯỜNG XANH`]);
+            wsData.push([]); // Dòng trống
+            
+            // Header chính
+            wsData.push([
+                'STT', 'Mã NV', 'Họ và tên', 'Bộ phận', 'Chức vụ',
+                'Số giờ công', 'Số giờ TC', 'Lương cơ bản', 'Tiền tăng ca',
+                'Phụ cấp', 'Thưởng', 'Tổng thu nhập',
+                'Tạm ứng', 'Bảo hiểm', 'Nợ tháng trước', 'Giảm trừ khác', 'Tổng giảm',
+                'Thực lĩnh', 'Ghi chú'
+            ]);
+            
+            // Dữ liệu nhân viên
+            var totalStats = {
+                employees: 0,
+                totalHours: 0,
+                totalOvertime: 0,
+                totalBasicSalary: 0,
+                totalOvertimePay: 0,
+                totalAllowance: 0,
+                totalBonus: 0,
+                totalIncome: 0,
+                totalAdvance: 0,
+                totalInsurance: 0,
+                totalPrevDebt: 0,
+                totalDeductions: 0,
+                totalGrandDeductions: 0,
+                totalNetSalary: 0
+            };
+
+            filteredData.forEach((record, index) => {
+                var empId = record['ID_NhanVien'] || record['MaNhanVien'] || '';
+                var empInfo = userData.find(u => u['ID'] === empId);
+                
+                // Lấy thông tin nhân viên
+                var empName = record['HoTen'] || record['Họ và tên'] || empId;
+                var department = empInfo?.['Bộ phận'] || empInfo?.['Bo_phan'] || '';
+                var position = empInfo?.['Chức vụ'] || empInfo?.['Chuc_vu'] || '';
+                
+                // Tính toán số liệu
+                var totalHours = parseFloat(record['TongGioCong']) || 0;
+                var totalOvertime = parseFloat(record['TongGioTangCa']) || 0;
+                var basicSalary = parseFloat(record['TongLuongCoBan']) || 0;
+                var overtimePay = parseFloat(record['TongTienTangCa']) || 0;
+                var allowance = parseFloat(record['TongPhuCap']) || 0;
+                var bonus = parseFloat(record['TongThuong']) || 0;
+                var totalIncome = basicSalary + overtimePay + allowance + bonus;
+                
+                var advance = parseFloat(record['TongTamUng']) || 0;
+                var insurance = parseFloat(record['TongBaoHiem']) || 0;
+                var prevDebt = parseFloat(record['NoThangTruoc']) || 0;
+                var otherDeductions = parseFloat(record['TongGiamTru']) || 0;
+                var totalGrandDeductions = advance + insurance + prevDebt + otherDeductions;
+                
+                var netSalary = totalIncome - totalGrandDeductions;
+                var note = record['GhiChu'] || record['Ghi chú'] || '';
+                
+                // Cập nhật thống kê tổng
+                totalStats.employees++;
+                totalStats.totalHours += totalHours;
+                totalStats.totalOvertime += totalOvertime;
+                totalStats.totalBasicSalary += basicSalary;
+                totalStats.totalOvertimePay += overtimePay;
+                totalStats.totalAllowance += allowance;
+                totalStats.totalBonus += bonus;
+                totalStats.totalIncome += totalIncome;
+                totalStats.totalAdvance += advance;
+                totalStats.totalInsurance += insurance;
+                totalStats.totalPrevDebt += prevDebt;
+                totalStats.totalDeductions += otherDeductions;
+                totalStats.totalGrandDeductions += totalGrandDeductions;
+                totalStats.totalNetSalary += netSalary;
+
+                // Thêm dòng dữ liệu
+                wsData.push([
+                    index + 1,
+                    empId,
+                    empName,
+                    department,
+                    position,
+                    totalHours, // Sẽ được format trong Excel
+                    totalOvertime,
+                    basicSalary,
+                    overtimePay,
+                    allowance,
+                    bonus,
+                    totalIncome,
+                    advance,
+                    insurance,
+                    prevDebt,
+                    otherDeductions,
+                    totalGrandDeductions,
+                    netSalary,
+                    note
+                ]);
+            });
+
+            // Thêm dòng trống trước tổng cộng
+            wsData.push([]);
+            
+            // Dòng tổng cộng với công thức
+            var totalRowIndex = wsData.length + 1; // +1 vì Excel bắt đầu từ 1
+            wsData.push([
+                '',
+                'TỔNG CỘNG',
+                `${totalStats.employees} nhân viên`,
+                '',
+                '',
+                { f: `=SUM(F4:F${wsData.length - 1})` }, // Tổng giờ công
+                { f: `=SUM(G4:G${wsData.length - 1})` }, // Tổng giờ TC
+                { f: `=SUM(H4:H${wsData.length - 1})` }, // Tổng lương cơ bản
+                { f: `=SUM(I4:I${wsData.length - 1})` }, // Tổng tiền TC
+                { f: `=SUM(J4:J${wsData.length - 1})` }, // Tổng phụ cấp
+                { f: `=SUM(K4:K${wsData.length - 1})` }, // Tổng thưởng
+                { f: `=SUM(L4:L${wsData.length - 1})` }, // Tổng thu nhập
+                { f: `=SUM(M4:M${wsData.length - 1})` }, // Tổng tạm ứng
+                { f: `=SUM(N4:N${wsData.length - 1})` }, // Tổng bảo hiểm
+                { f: `=SUM(O4:O${wsData.length - 1})` }, // Tổng nợ tháng trước
+                { f: `=SUM(P4:P${wsData.length - 1})` }, // Tổng giảm trừ khác
+                { f: `=SUM(Q4:Q${wsData.length - 1})` }, // Tổng giảm
+                { f: `=SUM(R4:R${wsData.length - 1})` }, // Tổng thực lĩnh
+                'Tổng cộng bảng lương'
+            ]);
+            
+            // Thêm thống kê tóm tắt
+            wsData.push([]);
+            wsData.push(['THỐNG KÊ TỔNG QUAN:']);
+            wsData.push(['Tổng thu nhập:', { f: `=L${totalRowIndex}` }]);
+            wsData.push(['Tổng chi phí:', { f: `=Q${totalRowIndex}` }]);
+            wsData.push(['Thu nhập ròng:', { f: `=R${totalRowIndex}` }]);
+            wsData.push(['Lương TB/người:', { f: `=R${totalRowIndex}/C${totalRowIndex}` }]);
+
+            // Tạo worksheet
+            var ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            // Merge tiêu đề
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: 18 } } // Merge tiêu đề toàn bộ dòng đầu
+            ];
+
+            // Set column widths
+            ws['!cols'] = [
+                { wch: 5 },  // STT
+                { wch: 10 }, // Mã NV
+                { wch: 20 }, // Họ và tên
+                { wch: 15 }, // Bộ phận
+                { wch: 15 }, // Chức vụ
+                { wch: 10 }, // Số giờ công
+                { wch: 10 }, // Số giờ TC
+                { wch: 13 }, // Lương cơ bản
+                { wch: 13 }, // Tiền tăng ca
+                { wch: 12 }, // Phụ cấp
+                { wch: 10 }, // Thưởng
+                { wch: 14 }, // Tổng thu nhập
+                { wch: 12 }, // Tạm ứng
+                { wch: 10 }, // Bảo hiểm
+                { wch: 12 }, // Nợ tháng trước
+                { wch: 12 }, // Giảm trừ khác
+                { wch: 12 }, // Tổng giảm
+                { wch: 14 }, // Thực lĩnh
+                { wch: 20 }  // Ghi chú
+            ];
+
+            // Styling cho Excel
+            var range = XLSX.utils.decode_range(ws['!ref']);
+            
+            for (var R = range.s.r; R <= range.e.r; ++R) {
+                for (var C = range.s.c; C <= range.e.c; ++C) {
+                    var cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+                    if (!cell) continue;
+                    
+                    // Thiết lập style cơ bản
+                    cell.s = {
+                        alignment: { horizontal: "center", vertical: "center" },
+                        border: {
+                            top: { style: "thin", color: { rgb: "000000" } },
+                            bottom: { style: "thin", color: { rgb: "000000" } },
+                            left: { style: "thin", color: { rgb: "000000" } },
+                            right: { style: "thin", color: { rgb: "000000" } }
+                        },
+                        font: { size: 11 }
+                    };
+                    
+                    // Định dạng tiêu đề
+                    if (R === 0) {
+                        cell.s.font = { bold: true, size: 16, color: { rgb: "FFFFFF" } };
+                        cell.s.fill = { fgColor: { rgb: "2E7D32" } }; // Xanh brand
+                        cell.s.border = {
+                            top: { style: "thick", color: { rgb: "000000" } },
+                            bottom: { style: "thick", color: { rgb: "000000" } },
+                            left: { style: "thick", color: { rgb: "000000" } },
+                            right: { style: "thick", color: { rgb: "000000" } }
+                        };
+                    }
+                    // Định dạng header
+                    else if (R === 2) {
+                        cell.s.font = { bold: true, size: 10, color: { rgb: "FFFFFF" } };
+                        cell.s.fill = { fgColor: { rgb: "4CAF50" } }; // Xanh lá header
+                        // Căn phải cho cột số liệu (từ cột 5 trở đi)
+                        if (C >= 5 && C <= 17) {
+                            cell.s.alignment.horizontal = "right";
+                        }
+                    }
+                    // Định dạng dòng tổng cộng
+                    else if (R === range.e.r) {
+                        cell.s.font = { bold: true, size: 11, color: { rgb: "FFFFFF" } };
+                        cell.s.fill = { fgColor: { rgb: "FF9800" } }; // Cam cho tổng cộng
+                        if (C >= 5 && C <= 17) {
+                            cell.s.alignment.horizontal = "right";
+                        }
+                    }
+                    // Định dạng dữ liệu
+                    else if (R >= 3 && R < range.e.r) {
+                        // Căn phải cho cột số liệu
+                        if (C >= 5 && C <= 17) {
+                            cell.s.alignment.horizontal = "right";
+                        }
+                        
+                        // Định dạng số cho các cột tiền tệ
+                        if ((C >= 7 && C <= 11) || (C >= 12 && C <= 17)) {
+                            if (typeof cell.v === 'number') {
+                                cell.z = '#,##0'; // Định dạng số với phân tách hàng ngàn
+                            }
+                            
+                            // Màu sắc theo loại
+                            if (C >= 7 && C <= 11) {
+                                cell.s.font.color = { rgb: "2E7D32" }; // Xanh cho thu nhập
+                            } else if (C >= 12 && C <= 16) {
+                                cell.s.font.color = { rgb: "D32F2F" }; // Đỏ cho khoản trừ
+                            } else if (C === 17) {
+                                cell.s.font.color = { rgb: "1976D2" }; // Xanh dương cho thực lĩnh
+                                cell.s.font.bold = true;
+                            }
+                        }
+                        // Định dạng số giờ
+                        else if (C === 5 || C === 6) {
+                            if (typeof cell.v === 'number') {
+                                cell.z = '0.0'; // 1 chữ số thập phân
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Thêm worksheet vào workbook
+            XLSX.utils.book_append_sheet(wb, ws, `Bảng lương T${month}-${year}`);
+
+            // Xuất file
+            var fileName = `BangLuong_Thang${month}_${year}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Thành công!',
+                html: `
+                    <div class="text-start">
+                        <p><strong>File Excel bảng lương đã được tải xuống:</strong></p>
+                        <ul class="list-unstyled">
+                            <li>✅ <strong>${filteredData.length} nhân viên</strong> trong tháng ${month}/${year}</li>
+                            <li>✅ Định dạng số với <strong>phân tách hàng ngàn</strong></li>
+                            <li>✅ Căn lề phải cho tất cả số liệu</li>
+                            <li>✅ Màu sắc phân biệt: Thu nhập (xanh), Chi phí (đỏ), Thực lĩnh (xanh dương)</li>
+                            <li>✅ Công thức Excel tự động tính tổng cộng</li>
+                            <li>✅ Thông tin đầy đủ: Bộ phận, Chức vụ, Chi tiết thu chi</li>
+                            <li>✅ Header chuyên nghiệp với merge cells</li>
+                        </ul>
+                        <p class="text-muted small">File: <code>${fileName}</code></p>
+                        <div class="alert alert-info py-2 mt-2" style="font-size: 12px;">
+                            <i class="fas fa-info-circle me-1"></i>
+                            <strong>Tổng lương tháng:</strong> <span class="fw-bold text-primary">${formatMoney(totalStats.totalNetSalary, true)}</span>
+                        </div>
+                    </div>
+                `,
+                confirmButtonText: 'Đóng',
+                confirmButtonColor: '#28a745',
+                width: '600px'
+            });
+
+        } catch (error) {
+            console.error('Lỗi xuất Excel bảng lương:', error);
+            Swal.fire({
+                icon: 'error',
+                title: 'Lỗi xuất Excel',
+                text: 'Có lỗi xảy ra khi tạo file Excel: ' + error.message,
+                confirmButtonColor: '#dc3545'
+            });
+        }
+    }, 100);
 }
 
 // --- POPUP CHI TIẾT LƯƠNG THEO ĐỊNH DẠNG MẪUI ---
